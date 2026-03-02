@@ -1,8 +1,10 @@
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
 import config from './config.js';
 
+const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function ensureDataDir(dbPath) {
@@ -18,7 +20,13 @@ ensureDataDir(resolvedPath);
 const sqlJsModule = await import('sql.js');
 const initSqlJs = sqlJsModule.default;
 const SQL = await initSqlJs({
-  locateFile: (file) => join(__dirname, 'node_modules', 'sql.js', 'dist', file),
+  locateFile: (file) => {
+    try {
+      return require.resolve(`sql.js/dist/${file}`);
+    } catch {
+      return join(__dirname, 'node_modules', 'sql.js', 'dist', file);
+    }
+  },
 });
 
 let db;
