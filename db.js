@@ -24,7 +24,9 @@ const SQL = await initSqlJs({
     try {
       return require.resolve(`sql.js/dist/${file}`);
     } catch {
-      return join(__dirname, 'node_modules', 'sql.js', 'dist', file);
+      const local = join(__dirname, 'node_modules', 'sql.js', 'dist', file);
+      if (existsSync(local)) return local;
+      return `https://sql.js.org/dist/${file}`;
     }
   },
 });
