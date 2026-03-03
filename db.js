@@ -20,6 +20,15 @@ export function generateInviteLink() {
 }
 
 const useTurso = config.database.turso?.url && config.database.turso?.authToken;
+const isVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+
+// On Vercel, persistence requires Turso. Without it we'd use /tmp (ephemeral).
+if (isVercel && !useTurso) {
+  console.error(
+    '[db] Vercel detected but TURSO_DATABASE_URL and/or TURSO_AUTH_TOKEN are not set. ' +
+    'Data will not persist. Add both in Vercel → Project → Settings → Environment Variables, then redeploy.'
+  );
+}
 
 /** Returns a promise that resolves to the db API (same shape for Turso or file). Use: const db = await getDb(); */
 let dbPromise = null;
