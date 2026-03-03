@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import config from './config.js';
-import db, { save, generateUniqueInviteLink } from './db.js';
+import { getDb } from './db.js';
 
 const app = express();
 const PORT = config.port;
@@ -26,9 +26,10 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
   try {
-    db.exec('SELECT 1');
+    const db = await getDb();
+    await db.healthCheck();
     res.json({ status: 'ok', database: 'connected' });
   } catch (err) {
     res.status(503).json({ status: 'error', database: 'disconnected' });
@@ -42,9 +43,10 @@ api.get('/example', (req, res) => {
   res.json({ message: 'Hello from backend' });
 });
 
-api.get('/invites/generate', (req, res) => {
+api.get('/invites/generate', async (req, res) => {
   try {
-    const invite_link = generateUniqueInviteLink();
+    const db = await getDb();
+    const invite_link = await db.generateUniqueInviteLink();
     res.json({ invite_link });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -53,82 +55,55 @@ api.get('/invites/generate', (req, res) => {
 
 const ASSESSMENT_EXPIRE_MS = 30 * 60 * 1000; // 30 minutes
 
-function inviteRowToObject(columns, row) {
-  return Object.fromEntries(columns.map((col, i) => [col, row[i]]));
-}
-
 /** connections_status: 0=not started, 1=started, 2=camera fixed, 3=completed. If started and 30 mins passed, set to 3. */
-function maybeExpireInviteByTime(inviteLink) {
-  const stmt = db.prepare('SELECT assessment_started_at, connections_status FROM invites WHERE invite_link = ?');
-  stmt.bind([inviteLink]);
-  const r = stmt.step() ? stmt.get() : null;
-  stmt.free();
-  if (!r || r[0] == null || Number(r[1]) === 3) return false;
-  const startedAt = new Date(r[0]).getTime();
-  if (Number.isNaN(startedAt) || Date.now() - startedAt < ASSESSMENT_EXPIRE_MS) return false;
-  db.run('UPDATE invites SET connections_status = 3, completed_at = COALESCE(completed_at, ?) WHERE invite_link = ?', [new Date().toISOString(), inviteLink]);
-  save();
-  return true;
+async function maybeExpireInviteByTime(db, inviteLink) {
+  return db.maybeExpireInviteByTime(inviteLink, ASSESSMENT_EXPIRE_MS);
 }
 
-api.get('/invites', (req, res) => {
+api.get('/invites', async (req, res) => {
   try {
-    const result = db.exec('SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at FROM invites');
-    const columns = result[0]?.columns ?? [];
-    const rows = result[0]?.values ?? [];
-    const invites = rows.map((row) => {
-      const link = row[columns.indexOf('invite_link')];
-      if (maybeExpireInviteByTime(link)) {
-        const re = db.prepare('SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at FROM invites WHERE invite_link = ?');
-        re.bind([link]);
-        const newRow = re.step() ? re.get() : null;
-        re.free();
-        return newRow ? inviteRowToObject(columns, newRow) : inviteRowToObject(columns, row);
+    const db = await getDb();
+    let invites = await db.getInvites();
+    for (let i = 0; i < invites.length; i++) {
+      const expired = await maybeExpireInviteByTime(db, invites[i].invite_link);
+      if (expired) {
+        const updated = await db.getInvite(invites[i].invite_link);
+        if (updated) invites[i] = updated;
       }
-      return inviteRowToObject(columns, row);
-    });
+    }
     res.json({ invites });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-api.get('/invites/:invite_link', (req, res) => {
+api.get('/invites/:invite_link', async (req, res) => {
   try {
     const { invite_link } = req.params;
-    maybeExpireInviteByTime(invite_link);
-    const stmt = db.prepare('SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at FROM invites WHERE invite_link = ?');
-    stmt.bind([invite_link]);
-    const row = stmt.step() ? stmt.get() : null;
-    stmt.free();
-    if (!row) {
+    const db = await getDb();
+    await maybeExpireInviteByTime(db, invite_link);
+    const invite = await db.getInvite(invite_link);
+    if (!invite) {
       return res.status(404).json({ error: 'Invite not found' });
     }
-    res.json({
-      invite: {
-        invite_link: row[0], connections_status: row[1], email: row[2], position_title: row[3], note: row[4],
-        created_at: row[5], completed_at: row[6], assessment_started_at: row[7] ?? null,
-      },
-    });
+    res.json({ invite });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // Real-time assessment timer: remaining seconds from assessment_started_at (frontend only displays this).
-api.get('/invites/:invite_link/timer', (req, res) => {
+api.get('/invites/:invite_link/timer', async (req, res) => {
   try {
     const { invite_link } = req.params;
-    maybeExpireInviteByTime(invite_link);
-    const stmt = db.prepare('SELECT assessment_started_at, connections_status FROM invites WHERE invite_link = ?');
-    stmt.bind([invite_link]);
-    const row = stmt.step() ? stmt.get() : null;
-    stmt.free();
+    const db = await getDb();
+    await maybeExpireInviteByTime(db, invite_link);
+    const row = await db.getTimer(invite_link);
     if (!row) {
       return res.status(404).json({ error: 'Invite not found' });
     }
-    const startedAt = row[0] ? new Date(row[0]).getTime() : null;
-    const expired = Number(row[1]) === 3;
+    const startedAt = row.assessment_started_at ? new Date(row.assessment_started_at).getTime() : null;
+    const expired = Number(row.connections_status) === 3;
     const now = Date.now();
     let seconds_remaining = 0;
     if (!expired && startedAt && !Number.isNaN(startedAt)) {
@@ -144,104 +119,87 @@ api.get('/invites/:invite_link/timer', (req, res) => {
   }
 });
 
-api.post('/invites', (req, res) => {
+api.post('/invites', async (req, res) => {
   console.log('POST /api/invites received');
   try {
+    const db = await getDb();
     let invite_link;
     if (req.body?.invite_link && typeof req.body.invite_link === 'string') {
       invite_link = req.body.invite_link.trim();
       if (!invite_link) {
         return res.status(400).json({ error: 'invite_link cannot be empty' });
       }
-      const check = db.prepare('SELECT 1 FROM invites WHERE invite_link = ?');
-      check.bind([invite_link]);
-      const exists = check.step();
-      check.free();
+      const exists = await db.inviteExists(invite_link);
       if (exists) {
         return res.status(409).json({ error: 'Invite link already exists in DB' });
       }
     } else {
-      invite_link = generateUniqueInviteLink();
+      invite_link = await db.generateUniqueInviteLink();
     }
     const emailRaw = req.body?.email != null ? String(req.body.email).trim() || null : null;
     const positionTitleRaw = req.body?.position_title != null ? String(req.body.position_title).trim() || null : null;
     const noteRaw = req.body?.note != null ? String(req.body.note).trim() || null : null;
-    const createdAt = new Date().toISOString();
-    db.run('INSERT INTO invites (invite_link, connections_status, email, position_title, note, created_at, assessment_started_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [invite_link, 0, emailRaw, positionTitleRaw, noteRaw, createdAt, null]);
-    save();
-    res.status(201).json({
-      invite: { invite_link, connections_status: 0, email: emailRaw ?? null, position_title: positionTitleRaw ?? null, note: noteRaw ?? null, created_at: createdAt, completed_at: null, assessment_started_at: null },
+    const invite = await db.createInvite({
+      invite_link,
+      email: emailRaw,
+      position_title: positionTitleRaw,
+      note: noteRaw,
     });
+    res.status(201).json({ invite });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-api.patch('/invites/:invite_link', (req, res) => {
+api.patch('/invites/:invite_link', async (req, res) => {
   try {
     const { invite_link } = req.params;
     const { connections_status, email, position_title, note, assessment_started_at } = req.body;
-    const updates = [];
-    const values = [];
+    const updates = {};
     if (typeof connections_status === 'number' || typeof connections_status === 'string') {
-      updates.push('connections_status = ?');
-      values.push(Number(connections_status));
+      updates.connections_status = Number(connections_status);
       if (Number(connections_status) === 3) {
-        updates.push('completed_at = COALESCE(completed_at, ?)');
-        values.push(new Date().toISOString());
+        updates.completed_at = new Date().toISOString();
       }
-      // When starting assessment (connections_status = 1), set assessment_started_at to now if not provided
       if (Number(connections_status) === 1 && assessment_started_at === undefined) {
-        updates.push('assessment_started_at = ?');
-        values.push(new Date().toISOString());
+        updates.assessment_started_at = new Date().toISOString();
       }
     }
     if (email !== undefined) {
-      updates.push('email = ?');
-      values.push(email === null || email === '' ? null : String(email).trim());
+      updates.email = email === null || email === '' ? null : String(email).trim();
     }
     if (position_title !== undefined) {
-      updates.push('position_title = ?');
-      values.push(position_title === null || position_title === '' ? null : String(position_title).trim());
+      updates.position_title = position_title === null || position_title === '' ? null : String(position_title).trim();
     }
     if (note !== undefined) {
-      updates.push('note = ?');
-      values.push(note === null || note === '' ? null : String(note).trim());
+      updates.note = note === null || note === '' ? null : String(note).trim();
     }
     if (assessment_started_at !== undefined) {
-      updates.push('assessment_started_at = ?');
-      values.push(assessment_started_at === null || assessment_started_at === '' ? null : String(assessment_started_at).trim());
+      updates.assessment_started_at = assessment_started_at === null || assessment_started_at === '' ? null : String(assessment_started_at).trim();
     }
-    if (updates.length === 0) {
+    if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'Provide at least one field to update' });
     }
-    values.push(invite_link);
-    db.run(`UPDATE invites SET ${updates.join(', ')} WHERE invite_link = ?`, values);
-    if (db.getRowsModified() === 0) {
+    const db = await getDb();
+    const invite = await db.updateInvite(invite_link, updates);
+    if (!invite) {
       return res.status(404).json({ error: 'Invite not found' });
     }
-    save();
-    const cols = ['invite_link', 'connections_status', 'email', 'position_title', 'note', 'created_at', 'completed_at', 'assessment_started_at'];
-    const sel = db.prepare(`SELECT ${cols.join(', ')} FROM invites WHERE invite_link = ?`);
-    sel.bind([invite_link]);
-    const row = sel.step() ? sel.get() : null;
-    sel.free();
-    const invite = row ? Object.fromEntries(cols.map((c, i) => [c, row[i]])) : null;
-    res.json({ invite: invite || { invite_link, ...req.body } });
+    res.json({ invite });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // Remove invite: hard delete from DB (row is removed, not updated).
-api.delete('/invites/:invite_link', (req, res) => {
+api.delete('/invites/:invite_link', async (req, res) => {
   try {
     const { invite_link } = req.params;
-    db.run('DELETE FROM invites WHERE invite_link = ?', [invite_link]);
-    if (db.getRowsModified() === 0) {
+    const db = await getDb();
+    const deleted = await db.deleteInvite(invite_link);
+    if (!deleted) {
       return res.status(404).json({ error: 'Invite not found' });
     }
-    save();
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -20,6 +20,11 @@ const config = {
     })(),
     /** Enable WAL mode for better concurrent read performance */
     wal: process.env.DATABASE_WAL !== 'false',
+    /** Turso (libsql) – when set, backend uses Turso instead of file SQLite. Use on Vercel for persistence. */
+    turso: {
+      url: process.env.TURSO_DATABASE_URL?.trim() || null,
+      authToken: process.env.TURSO_AUTH_TOKEN?.trim() || null,
+    },
   },
 };
 
