@@ -88,6 +88,38 @@ try {
   // Column already exists
 }
 
+// Add position_title column if missing (existing DBs)
+try {
+  db.run('ALTER TABLE invites ADD COLUMN position_title TEXT');
+  save();
+} catch (_) {
+  // Column already exists
+}
+
+// Add note column if missing (existing DBs)
+try {
+  db.run('ALTER TABLE invites ADD COLUMN note TEXT');
+  save();
+} catch (_) {
+  // Column already exists
+}
+
+// Add created_at and completed_at columns (ISO 8601 text)
+try {
+  db.run('ALTER TABLE invites ADD COLUMN created_at TEXT');
+  save();
+} catch (_) {}
+try {
+  db.run('ALTER TABLE invites ADD COLUMN completed_at TEXT');
+  save();
+} catch (_) {}
+
+// When candidate starts assessment (connections_status set to 1)
+try {
+  db.run('ALTER TABLE invites ADD COLUMN assessment_started_at TEXT');
+  save();
+} catch (_) {}
+
 const countResult = db.exec('SELECT COUNT(*) AS n FROM invites');
 const count = countResult.length ? countResult[0].values[0][0] : 0;
 if (count === 0) {

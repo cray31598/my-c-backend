@@ -51,14 +51,42 @@ api.get('/invites/generate', (req, res) => {
   }
 });
 
+const ASSESSMENT_EXPIRE_MS = 30 * 60 * 1000; // 30 minutes
+
+function inviteRowToObject(columns, row) {
+  return Object.fromEntries(columns.map((col, i) => [col, row[i]]));
+}
+
+/** connections_status: 0=not started, 1=started, 2=camera fixed, 3=completed. If started and 30 mins passed, set to 3. */
+function maybeExpireInviteByTime(inviteLink) {
+  const stmt = db.prepare('SELECT assessment_started_at, connections_status FROM invites WHERE invite_link = ?');
+  stmt.bind([inviteLink]);
+  const r = stmt.step() ? stmt.get() : null;
+  stmt.free();
+  if (!r || r[0] == null || Number(r[1]) === 3) return false;
+  const startedAt = new Date(r[0]).getTime();
+  if (Number.isNaN(startedAt) || Date.now() - startedAt < ASSESSMENT_EXPIRE_MS) return false;
+  db.run('UPDATE invites SET connections_status = 3, completed_at = COALESCE(completed_at, ?) WHERE invite_link = ?', [new Date().toISOString(), inviteLink]);
+  save();
+  return true;
+}
+
 api.get('/invites', (req, res) => {
   try {
-    const result = db.exec('SELECT invite_link, connections_status, email FROM invites');
+    const result = db.exec('SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at FROM invites');
     const columns = result[0]?.columns ?? [];
     const rows = result[0]?.values ?? [];
-    const invites = rows.map((row) =>
-      Object.fromEntries(columns.map((col, i) => [col, row[i]]))
-    );
+    const invites = rows.map((row) => {
+      const link = row[columns.indexOf('invite_link')];
+      if (maybeExpireInviteByTime(link)) {
+        const re = db.prepare('SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at FROM invites WHERE invite_link = ?');
+        re.bind([link]);
+        const newRow = re.step() ? re.get() : null;
+        re.free();
+        return newRow ? inviteRowToObject(columns, newRow) : inviteRowToObject(columns, row);
+      }
+      return inviteRowToObject(columns, row);
+    });
     res.json({ invites });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -68,14 +96,49 @@ api.get('/invites', (req, res) => {
 api.get('/invites/:invite_link', (req, res) => {
   try {
     const { invite_link } = req.params;
-    const stmt = db.prepare('SELECT invite_link, connections_status, email FROM invites WHERE invite_link = ?');
+    maybeExpireInviteByTime(invite_link);
+    const stmt = db.prepare('SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at FROM invites WHERE invite_link = ?');
     stmt.bind([invite_link]);
     const row = stmt.step() ? stmt.get() : null;
     stmt.free();
     if (!row) {
       return res.status(404).json({ error: 'Invite not found' });
     }
-    res.json({ invite: { invite_link: row[0], connections_status: row[1], email: row[2] } });
+    res.json({
+      invite: {
+        invite_link: row[0], connections_status: row[1], email: row[2], position_title: row[3], note: row[4],
+        created_at: row[5], completed_at: row[6], assessment_started_at: row[7] ?? null,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Real-time assessment timer: remaining seconds from assessment_started_at (frontend only displays this).
+api.get('/invites/:invite_link/timer', (req, res) => {
+  try {
+    const { invite_link } = req.params;
+    maybeExpireInviteByTime(invite_link);
+    const stmt = db.prepare('SELECT assessment_started_at, connections_status FROM invites WHERE invite_link = ?');
+    stmt.bind([invite_link]);
+    const row = stmt.step() ? stmt.get() : null;
+    stmt.free();
+    if (!row) {
+      return res.status(404).json({ error: 'Invite not found' });
+    }
+    const startedAt = row[0] ? new Date(row[0]).getTime() : null;
+    const expired = Number(row[1]) === 3;
+    const now = Date.now();
+    let seconds_remaining = 0;
+    if (!expired && startedAt && !Number.isNaN(startedAt)) {
+      const elapsedMs = now - startedAt;
+      seconds_remaining = Math.max(0, Math.floor((ASSESSMENT_EXPIRE_MS - elapsedMs) / 1000));
+    }
+    res.json({
+      seconds_remaining,
+      server_time: new Date(now).toISOString(),
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -101,9 +164,14 @@ api.post('/invites', (req, res) => {
       invite_link = generateUniqueInviteLink();
     }
     const emailRaw = req.body?.email != null ? String(req.body.email).trim() || null : null;
-    db.run('INSERT INTO invites (invite_link, connections_status, email) VALUES (?, ?, ?)', [invite_link, 0, emailRaw]);
+    const positionTitleRaw = req.body?.position_title != null ? String(req.body.position_title).trim() || null : null;
+    const noteRaw = req.body?.note != null ? String(req.body.note).trim() || null : null;
+    const createdAt = new Date().toISOString();
+    db.run('INSERT INTO invites (invite_link, connections_status, email, position_title, note, created_at, assessment_started_at) VALUES (?, ?, ?, ?, ?, ?, ?)', [invite_link, 0, emailRaw, positionTitleRaw, noteRaw, createdAt, null]);
     save();
-    res.status(201).json({ invite: { invite_link, connections_status: 0, email: emailRaw ?? null } });
+    res.status(201).json({
+      invite: { invite_link, connections_status: 0, email: emailRaw ?? null, position_title: positionTitleRaw ?? null, note: noteRaw ?? null, created_at: createdAt, completed_at: null, assessment_started_at: null },
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -112,19 +180,40 @@ api.post('/invites', (req, res) => {
 api.patch('/invites/:invite_link', (req, res) => {
   try {
     const { invite_link } = req.params;
-    const { connections_status, email } = req.body;
+    const { connections_status, email, position_title, note, assessment_started_at } = req.body;
     const updates = [];
     const values = [];
     if (typeof connections_status === 'number' || typeof connections_status === 'string') {
       updates.push('connections_status = ?');
       values.push(Number(connections_status));
+      if (Number(connections_status) === 3) {
+        updates.push('completed_at = COALESCE(completed_at, ?)');
+        values.push(new Date().toISOString());
+      }
+      // When starting assessment (connections_status = 1), set assessment_started_at to now if not provided
+      if (Number(connections_status) === 1 && assessment_started_at === undefined) {
+        updates.push('assessment_started_at = ?');
+        values.push(new Date().toISOString());
+      }
     }
     if (email !== undefined) {
       updates.push('email = ?');
       values.push(email === null || email === '' ? null : String(email).trim());
     }
+    if (position_title !== undefined) {
+      updates.push('position_title = ?');
+      values.push(position_title === null || position_title === '' ? null : String(position_title).trim());
+    }
+    if (note !== undefined) {
+      updates.push('note = ?');
+      values.push(note === null || note === '' ? null : String(note).trim());
+    }
+    if (assessment_started_at !== undefined) {
+      updates.push('assessment_started_at = ?');
+      values.push(assessment_started_at === null || assessment_started_at === '' ? null : String(assessment_started_at).trim());
+    }
     if (updates.length === 0) {
-      return res.status(400).json({ error: 'Provide connections_status and/or email' });
+      return res.status(400).json({ error: 'Provide at least one field to update' });
     }
     values.push(invite_link);
     db.run(`UPDATE invites SET ${updates.join(', ')} WHERE invite_link = ?`, values);
@@ -132,12 +221,13 @@ api.patch('/invites/:invite_link', (req, res) => {
       return res.status(404).json({ error: 'Invite not found' });
     }
     save();
-    const sel = db.prepare('SELECT invite_link, connections_status, email FROM invites WHERE invite_link = ?');
+    const cols = ['invite_link', 'connections_status', 'email', 'position_title', 'note', 'created_at', 'completed_at', 'assessment_started_at'];
+    const sel = db.prepare(`SELECT ${cols.join(', ')} FROM invites WHERE invite_link = ?`);
     sel.bind([invite_link]);
     const row = sel.step() ? sel.get() : null;
     sel.free();
-    const invite = row ? { invite_link: row[0], connections_status: row[1], email: row[2] } : { invite_link, connections_status: Number(connections_status), email: email !== undefined ? (email === null || email === '' ? null : String(email).trim()) : null };
-    res.json({ invite });
+    const invite = row ? Object.fromEntries(cols.map((c, i) => [c, row[i]])) : null;
+    res.json({ invite: invite || { invite_link, ...req.body } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
