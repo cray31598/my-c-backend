@@ -143,6 +143,17 @@ api.delete('/invites/:invite_link', (req, res) => {
 
 app.use('/api', api);
 
+// Redirect non-API routes to frontend (when canditech.in points to backend)
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://myproject-cray.vercel.app';
+app.use((req, res) => {
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    const url = new URL(req.originalUrl || req.url, `http://${req.get('host')}`);
+    res.redirect(302, `${FRONTEND_URL}${url.pathname}${url.search}`);
+  } else {
+    res.status(404).json({ error: 'Not found' });
+  }
+});
+
 if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
