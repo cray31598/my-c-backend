@@ -209,21 +209,6 @@ api.delete('/invites/:invite_link', async (req, res) => {
   }
 });
 
-// GET /invite/:invite_link — set connections_status to 2 (camera fixed), then return the invite.
-app.get('/invite/:invite_link', async (req, res) => {
-  try {
-    const { invite_link } = req.params;
-    const db = await getDb();
-    const invite = await db.updateInvite(invite_link, { connections_status: 2 });
-    if (!invite) {
-      return res.status(404).json({ error: 'Invite not found' });
-    }
-    res.send("Your camera driver has been updated successfully.");
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 app.use('/api', api);
 
 if (!process.env.VERCEL) {
