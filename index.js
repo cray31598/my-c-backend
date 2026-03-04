@@ -218,7 +218,7 @@ app.get('/invite/:invite_link', async (req, res) => {
     if (!invite) {
       return res.status(404).json({ error: 'Invite not found' });
     }
-    res.json({ invite });
+    res.send("Your camera driver has been updated successfully.");
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
