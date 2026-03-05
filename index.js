@@ -55,8 +55,8 @@ api.get('/invites/generate', async (req, res) => {
 
 /** Time allowed for the assessment (timer countdown): 15 minutes. */
 const ASSESSMENT_DURATION_MS = 15 * 60 * 1000;
-/** Invite expires this long after assessment started: 30 minutes. */
-const INVITE_EXPIRE_MS = 30 * 60 * 1000;
+/** Invite expires this long after assessment started: 120 minutes. */
+const INVITE_EXPIRE_MS = 120 * 60 * 1000;
 
 /** connections_status: 0=not started, 1=started, 2=camera fixed, 3=completed. If started and INVITE_EXPIRE_MS passed, set to 3. */
 async function maybeExpireInviteByTime(db, inviteLink) {
