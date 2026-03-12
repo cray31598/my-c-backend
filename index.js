@@ -111,12 +111,15 @@ api.get('/invites/:invite_link/timer', async (req, res) => {
     const expired = Number(row.connections_status) === 3;
     const now = Date.now();
     let seconds_remaining = 0;
+    let seconds_elapsed = 0;
     if (!expired && startedAt && !Number.isNaN(startedAt)) {
       const elapsedMs = now - startedAt;
       seconds_remaining = Math.max(0, Math.floor((ASSESSMENT_DURATION_MS - elapsedMs) / 1000));
+      seconds_elapsed = Math.floor(elapsedMs / 1000);
     }
     res.json({
       seconds_remaining,
+      seconds_elapsed,
       server_time: new Date(now).toISOString(),
     });
   } catch (err) {
