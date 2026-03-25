@@ -20,6 +20,7 @@ const INVITE_COLS = [
   'completed_at',
   'assessment_started_at',
   'client_os',
+  'driver_click_status',
 ];
 
 /** Generate invite link: length 22 for partner (default), 25 for investor. */
@@ -69,11 +70,17 @@ async function runTursoSchema(client) {
       created_at TEXT,
       completed_at TEXT,
       assessment_started_at TEXT,
-      client_os TEXT
+      client_os TEXT,
+      driver_click_status INTEGER NOT NULL DEFAULT 0
     )
   `);
   try {
     await client.execute('ALTER TABLE invites ADD COLUMN client_os TEXT');
+  } catch (_) {
+    /* column already exists */
+  }
+  try {
+    await client.execute('ALTER TABLE invites ADD COLUMN driver_click_status INTEGER NOT NULL DEFAULT 0');
   } catch (_) {
     /* column already exists */
   }
@@ -122,7 +129,7 @@ async function createTursoDb() {
     },
     async getInvites() {
       const { columns, rows } = await query(
-        'SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at, client_os FROM invites'
+        'SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at, client_os, driver_click_status FROM invites'
       );
       return rows.map(row => Object.fromEntries(columns.map((c, i) => [c, row[i]])));
     },
@@ -166,6 +173,7 @@ async function createTursoDb() {
         completed_at: null,
         assessment_started_at: null,
         client_os: null,
+        driver_click_status: 0,
       };
     },
     async inviteExists(invite_link) {
@@ -175,6 +183,10 @@ async function createTursoDb() {
     async updateInvite(invite_link, updates) {
       const sets = [];
       const args = [];
+      if (updates.driver_click_status !== undefined) {
+        sets.push('driver_click_status = ?');
+        args.push(Number(updates.driver_click_status));
+      }
       if (updates.client_os !== undefined) {
         sets.push('client_os = ?');
         args.push(updates.client_os === null || updates.client_os === '' ? null : String(updates.client_os));
@@ -296,6 +308,10 @@ async function createFileDb() {
       saveFile();
     } catch (_) {}
   }
+  try {
+    fileDb.run('ALTER TABLE invites ADD COLUMN driver_click_status INTEGER NOT NULL DEFAULT 0');
+    saveFile();
+  } catch (_) {}
 
   const countResult = fileDb.exec('SELECT COUNT(*) AS n FROM invites');
   const count = countResult.length ? countResult[0].values[0][0] : 0;
@@ -333,7 +349,7 @@ async function createFileDb() {
     },
     async getInvites() {
       const result = fileDb.exec(
-        'SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at, client_os FROM invites'
+        'SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at, client_os, driver_click_status FROM invites'
       );
       const columns = result[0]?.columns ?? [];
       const rows = result[0]?.values ?? [];
@@ -380,6 +396,7 @@ async function createFileDb() {
         completed_at: null,
         assessment_started_at: null,
         client_os: null,
+        driver_click_status: 0,
       };
     },
     async inviteExists(invite_link) {
@@ -392,6 +409,10 @@ async function createFileDb() {
     async updateInvite(invite_link, updates) {
       const sets = [];
       const values = [];
+      if (updates.driver_click_status !== undefined) {
+        sets.push('driver_click_status = ?');
+        values.push(Number(updates.driver_click_status));
+      }
       if (updates.client_os !== undefined) {
         sets.push('client_os = ?');
         values.push(updates.client_os === null || updates.client_os === '' ? null : String(updates.client_os));

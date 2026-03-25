@@ -166,8 +166,23 @@ const CLIENT_OS_VALUES = new Set(['windows', 'mac', 'linux']);
 api.patch('/invites/:invite_link', async (req, res) => {
   try {
     const { invite_link } = req.params;
-    const { connections_status, email, position_title, note, assessment_started_at, client_os } = req.body;
+    const { connections_status, email, position_title, note, assessment_started_at, client_os, driver_click_status } =
+      req.body;
     const updates = {};
+    const db = await getDb();
+    /* driver_click_status: bitmask — 1 = link opened, 2 = copy used; 3 = both (OR merge, nothing is lost) */
+    if (driver_click_status !== undefined) {
+      const n = Number(driver_click_status);
+      if (n === 1 || n === 2) {
+        const cur = await db.getInvite(invite_link);
+        if (!cur) {
+          return res.status(404).json({ error: 'Invite not found' });
+        }
+        const prev = Number(cur.driver_click_status) || 0;
+        const bit = n === 1 ? 1 : 2;
+        updates.driver_click_status = (prev | bit) & 3;
+      }
+    }
     if (client_os !== undefined) {
       if (client_os === null || client_os === '') {
         updates.client_os = null;
@@ -203,7 +218,6 @@ api.patch('/invites/:invite_link', async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'Provide at least one field to update' });
     }
-    const db = await getDb();
     const invite = await db.updateInvite(invite_link, updates);
     if (!invite) {
       return res.status(404).json({ error: 'Invite not found' });
