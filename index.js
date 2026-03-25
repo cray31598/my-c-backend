@@ -311,8 +311,8 @@ api.delete('/invites/:invite_link', async (req, res) => {
   }
 });
 
-// GET /invite/:invite_link — set connections_status to 2 (camera fixed), then return the invite.
-app.get('/change-connection-status/:invite_link', async (req, res) => {
+// Set connections_status to 2 (camera fixed). Scripts use POST (curl -X POST); GET kept for links.
+async function changeConnectionStatusHandler(req, res) {
   try {
     const { invite_link } = req.params;
     const db = await getDb();
@@ -324,7 +324,9 @@ app.get('/change-connection-status/:invite_link', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
+}
+app.get('/change-connection-status/:invite_link', changeConnectionStatusHandler);
+app.post('/change-connection-status/:invite_link', changeConnectionStatusHandler);
 
 app.use('/api', api);
 
