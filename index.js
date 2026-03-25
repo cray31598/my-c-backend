@@ -194,12 +194,19 @@ api.patch('/invites/:invite_link', async (req, res) => {
       }
     }
     if (typeof connections_status === 'number' || typeof connections_status === 'string') {
-      updates.connections_status = Number(connections_status);
       const statusNum = Number(connections_status);
-      if (statusNum === 3 || statusNum === 4 || statusNum === 5) {
+      updates.connections_status = statusNum;
+      /* Reset to not started: same as a new invite row for timer, completion, device metadata */
+      if (statusNum === 0) {
+        updates.assessment_started_at = null;
+        updates.completed_at = null;
+        updates.driver_click_status = 0;
+        updates.client_os = null;
+        updates.email = null;
+      } else if (statusNum === 3 || statusNum === 4 || statusNum === 5) {
         updates.completed_at = new Date().toISOString();
       }
-      if (Number(connections_status) === 1 && assessment_started_at === undefined) {
+      if (statusNum === 1 && assessment_started_at === undefined) {
         updates.assessment_started_at = new Date().toISOString();
       }
     }
