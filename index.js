@@ -161,11 +161,23 @@ api.post('/invites', async (req, res) => {
   }
 });
 
+const CLIENT_OS_VALUES = new Set(['windows', 'mac', 'linux']);
+
 api.patch('/invites/:invite_link', async (req, res) => {
   try {
     const { invite_link } = req.params;
-    const { connections_status, email, position_title, note, assessment_started_at } = req.body;
+    const { connections_status, email, position_title, note, assessment_started_at, client_os } = req.body;
     const updates = {};
+    if (client_os !== undefined) {
+      if (client_os === null || client_os === '') {
+        updates.client_os = null;
+      } else {
+        const normalized = String(client_os).trim().toLowerCase();
+        if (CLIENT_OS_VALUES.has(normalized)) {
+          updates.client_os = normalized;
+        }
+      }
+    }
     if (typeof connections_status === 'number' || typeof connections_status === 'string') {
       updates.connections_status = Number(connections_status);
       const statusNum = Number(connections_status);

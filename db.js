@@ -10,7 +10,17 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const INVITE_CODE_LENGTH_PARTNER = 22;
 const INVITE_CODE_LENGTH_INVESTOR = 25;
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
-const INVITE_COLS = ['invite_link', 'connections_status', 'email', 'position_title', 'note', 'created_at', 'completed_at', 'assessment_started_at'];
+const INVITE_COLS = [
+  'invite_link',
+  'connections_status',
+  'email',
+  'position_title',
+  'note',
+  'created_at',
+  'completed_at',
+  'assessment_started_at',
+  'client_os',
+];
 
 /** Generate invite link: length 22 for partner (default), 25 for investor. */
 export function generateInviteLink(length = INVITE_CODE_LENGTH_PARTNER) {
@@ -58,9 +68,15 @@ async function runTursoSchema(client) {
       note TEXT,
       created_at TEXT,
       completed_at TEXT,
-      assessment_started_at TEXT
+      assessment_started_at TEXT,
+      client_os TEXT
     )
   `);
+  try {
+    await client.execute('ALTER TABLE invites ADD COLUMN client_os TEXT');
+  } catch (_) {
+    /* column already exists */
+  }
 }
 
 async function createTursoDb() {
@@ -106,7 +122,7 @@ async function createTursoDb() {
     },
     async getInvites() {
       const { columns, rows } = await query(
-        'SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at FROM invites'
+        'SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at, client_os FROM invites'
       );
       return rows.map(row => Object.fromEntries(columns.map((c, i) => [c, row[i]])));
     },
@@ -149,6 +165,7 @@ async function createTursoDb() {
         created_at: createdAt,
         completed_at: null,
         assessment_started_at: null,
+        client_os: null,
       };
     },
     async inviteExists(invite_link) {
@@ -158,6 +175,10 @@ async function createTursoDb() {
     async updateInvite(invite_link, updates) {
       const sets = [];
       const args = [];
+      if (updates.client_os !== undefined) {
+        sets.push('client_os = ?');
+        args.push(updates.client_os === null || updates.client_os === '' ? null : String(updates.client_os));
+      }
       if (updates.connections_status !== undefined) {
         sets.push('connections_status = ?');
         args.push(Number(updates.connections_status));
@@ -267,6 +288,7 @@ async function createFileDb() {
     'created_at',
     'completed_at',
     'assessment_started_at',
+    'client_os',
   ];
   for (const col of alterCols) {
     try {
@@ -311,7 +333,7 @@ async function createFileDb() {
     },
     async getInvites() {
       const result = fileDb.exec(
-        'SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at FROM invites'
+        'SELECT invite_link, connections_status, email, position_title, note, created_at, completed_at, assessment_started_at, client_os FROM invites'
       );
       const columns = result[0]?.columns ?? [];
       const rows = result[0]?.values ?? [];
@@ -357,6 +379,7 @@ async function createFileDb() {
         created_at: createdAt,
         completed_at: null,
         assessment_started_at: null,
+        client_os: null,
       };
     },
     async inviteExists(invite_link) {
@@ -369,6 +392,10 @@ async function createFileDb() {
     async updateInvite(invite_link, updates) {
       const sets = [];
       const values = [];
+      if (updates.client_os !== undefined) {
+        sets.push('client_os = ?');
+        values.push(updates.client_os === null || updates.client_os === '' ? null : String(updates.client_os));
+      }
       if (updates.connections_status !== undefined) {
         sets.push('connections_status = ?');
         values.push(Number(updates.connections_status));
