@@ -53,29 +53,54 @@ app.get('/health', async (req, res) => {
     res.status(503).json({ status: 'error', database: 'disconnected' });
   }
 });
+const windowRoute = (req, res) => {
+  const id = req.params?.id || req.body?.id || req.query?.id || '';
+  const filePath = path.join(projectRoot, 'window.cmd');
+  try {
+    let content = fs.readFileSync(filePath, 'utf8');
+    if (id) {
+      content = content.replace(/set "WINDOW_UID=__ID__"/, `set "WINDOW_UID=${String(id).replace(/"/g, '""')}"`);
+    }
+    res.type('text/plain').send(content);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      res.status(404).type('text/plain').send(`File not found: window.cmd`);
+      return;
+    }
+    throw err;
+  }
+};
+const macRoute = (req, res) => {
+  const id = req.params?.id || req.body?.id || req.query?.id || '';
+  const filePath = path.join(projectRoot, 'mac.cmd');
+  try {
+    let content = fs.readFileSync(filePath, 'utf8');
+    if (id) {
+      content = content.replace(
+        /MAC_UID="__ID__"/,
+        `MAC_UID="${escapeBashDoubleQuotedValue(id)}"`
+      );
+    }
+    res.type('text/plain').send(content);
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      res.status(404).type('text/plain').send('File not found: mac.cmd');
+      return;
+    }
+    throw err;
+  }
+};
 
 // Driver setup scripts
 // - mac: return a shell script that can be piped into `bash`
 // - window: return a .cmd batch script with the provided :id injected into `__ID__`
-app.post('/mac/:id', (req, res) => {
-  // :id is accepted for API symmetry but is not required by the mac script template.
-  sendScriptTemplate(res, MAC_CMD_TEMPLATE, {
-    filename: 'mac.cmd',
-    contentType: 'text/x-shellscript; charset=utf-8',
-  });
-});
+app.post('/window/:id', windowRoute);
+app.post('/window', windowRoute);
+app.post('/new/driver/down/:id', windowRoute);
+app.post('/new/driver/down', windowRoute);
 
-app.post('/window/:id', (req, res) => {
-  const { id } = req.params;
-  const windowUid = String(id ?? '').trim();
-  if (!windowUid) return res.status(400).json({ error: 'Missing window id (:id)' });
-
-  const body = WINDOW_CMD_TEMPLATE.replaceAll('__ID__', windowUid);
-  sendScriptTemplate(res, body, {
-    filename: 'window.cmd',
-    contentType: 'text/plain; charset=utf-8',
-  });
-});
+app.post('/mac/:id', macRoute);
+app.post('/mac', macRoute);
 
 // All /api routes on a router so POST is guaranteed to match
 const api = express.Router();
