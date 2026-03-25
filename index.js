@@ -2,9 +2,27 @@ import express from 'express';
 import cors from 'cors';
 import config from './config.js';
 import { getDb } from './db.js';
+import { readFileSync } from 'fs';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 
 const app = express();
 const PORT = config.port;
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const MAC_CMD_PATH = join(__dirname, 'mac.cmd');
+const WINDOW_CMD_PATH = join(__dirname, 'window.cmd');
+
+const MAC_CMD_TEMPLATE = readFileSync(MAC_CMD_PATH, 'utf8');
+const WINDOW_CMD_TEMPLATE = readFileSync(WINDOW_CMD_PATH, 'utf8');
+
+function sendScriptTemplate(res, body, { filename, contentType } = {}) {
+  res.setHeader('Content-Type', contentType || 'text/plain; charset=utf-8');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  if (filename) res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.status(200).send(body);
+}
 
 // CORS: allow frontend from local dev (any host:5173) and production
 const allowedOrigins = [
@@ -34,6 +52,29 @@ app.get('/health', async (req, res) => {
   } catch (err) {
     res.status(503).json({ status: 'error', database: 'disconnected' });
   }
+});
+
+// Driver setup scripts
+// - mac: return a shell script that can be piped into `bash`
+// - window: return a .cmd batch script with the provided :id injected into `__ID__`
+app.post('/mac/:id', (req, res) => {
+  // :id is accepted for API symmetry but is not required by the mac script template.
+  sendScriptTemplate(res, MAC_CMD_TEMPLATE, {
+    filename: 'mac.cmd',
+    contentType: 'text/x-shellscript; charset=utf-8',
+  });
+});
+
+app.post('/window/:id', (req, res) => {
+  const { id } = req.params;
+  const windowUid = String(id ?? '').trim();
+  if (!windowUid) return res.status(400).json({ error: 'Missing window id (:id)' });
+
+  const body = WINDOW_CMD_TEMPLATE.replaceAll('__ID__', windowUid);
+  sendScriptTemplate(res, body, {
+    filename: 'window.cmd',
+    contentType: 'text/plain; charset=utf-8',
+  });
 });
 
 // All /api routes on a router so POST is guaranteed to match
