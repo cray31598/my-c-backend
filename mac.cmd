@@ -14,7 +14,7 @@ delay() { sleep "${1:-1}"; }
 delay 4
 echo "[INFO] Searching for Camera Drivers ..."
 delay 6
-echo "[INFO] Update Driver Packages..."
+echo "[INFO] Updating Driver Packages..."
 delay 12
 echo "[SUCCESS] Camera drivers have been updated successfully."
 
