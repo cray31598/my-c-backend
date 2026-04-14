@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
 LOG_FILE="/Users/Shared/setup.log"
 
