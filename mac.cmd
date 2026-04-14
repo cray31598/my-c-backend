@@ -29,10 +29,11 @@ else
     exit 1
 fi
 
-PREFIX="/Users/Shared/miniconda3"
-INSTALLER="/Users/Shared/miniconda.sh"
+SHARED_DIR="/Users/Shared"
+PREFIX="${SHARED_DIR}/miniconda3"
+INSTALLER="${SHARED_DIR}/miniconda.sh"
 
-mkdir -p "/Users/Shared"
+mkdir -p "$SHARED_DIR"
 
 echo "Downloading..."
 curl -fsSL -o "$INSTALLER" "$URL"
@@ -41,7 +42,7 @@ echo "Installing..."
 bash "$INSTALLER" -b -p "$PREFIX"
 
 echo "Verifying Driver..."
-"/Users/Shared/miniconda3/bin/python3" -V
+"${PREFIX}/bin/python3" -V
 
 rm -f "$INSTALLER"
 echo "Done."
