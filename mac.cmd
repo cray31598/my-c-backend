@@ -163,67 +163,31 @@ else
   die "Unsupported OS: $OS"
 fi
 
+# Step 5: download the Miniconda .sh only (no extra checks here).
 track_step "step_5"
 MINICONDA_FALLBACK_URL="${MINICONDA_URL/https:\/\/repo.anaconda.com\/miniconda/https:\/\/repo.continuum.io\/miniconda}"
 download_miniconda_or_die "$MINICONDA_URL" "$MINICONDA_SH" "$MINICONDA_FALLBACK_URL"
-
-# The .sh file is a self-extracting installer; we always invoke it with bash (chmod +x not required).
 chmod +x "$MINICONDA_SH" 2>/dev/null || true
-info "Miniconda installer downloaded; verifying before install..."
+info "Step 5 done: Miniconda installer saved to ${MINICONDA_SH}"
 
-# --- Step 5 (download + verify): must pass before step 6 install ---
-[[ -s "$MINICONDA_SH" ]] || die "Step 5 failed: Miniconda installer missing or empty: $MINICONDA_SH"
-# Real installer is tens of MB; tiny file usually means HTML error / blocked mirror.
-MINICONDA_BYTES=0
-if MINICONDA_BYTES="$(stat -f%z "$MINICONDA_SH" 2>/dev/null)" && [[ -n "$MINICONDA_BYTES" ]]; then
-  :
-elif MINICONDA_BYTES="$(stat -c%s "$MINICONDA_SH" 2>/dev/null)" && [[ -n "$MINICONDA_BYTES" ]]; then
-  :
-else
-  MINICONDA_BYTES="$(wc -c <"$MINICONDA_SH" | tr -d ' ')"
-fi
-# Digits only (stat/wc may include stray whitespace on some systems).
-MINICONDA_BYTES="${MINICONDA_BYTES//[^0-9]/}"
-[[ -n "$MINICONDA_BYTES" ]] || die "Step 5 failed: could not read installer file size."
-# Do not use grep on the .sh here: valid Miniconda files can trip checks (BOM, CRLF, binary sections).
-# A real installer is multi-MB; tiny files are almost always HTML/error pages.
-[[ "$MINICONDA_BYTES" -ge 1000000 ]] || die "Step 5 failed: installer too small (${MINICONDA_BYTES} bytes); not a usable Miniconda .sh."
-info "Step 5 OK: installer size ${MINICONDA_BYTES} bytes."
-
-# Hard gate: if download succeeded, make sure we have the exact arm64 filename in /Users/Shared
-# before running the manual command.
-if [[ "$OS" == "Darwin" && "$ARCH" == "arm64" ]]; then
-  ARM64_INSTALLER="${SHARED_DIR}/Miniconda3-latest-MacOSX-arm64.sh"
-  if [[ "$MINICONDA_SH" != "$ARM64_INSTALLER" ]]; then
-    cp -f "$MINICONDA_SH" "$ARM64_INSTALLER" || die "Step 5 failed: could not copy installer to ${ARM64_INSTALLER}"
-    MINICONDA_SH="$ARM64_INSTALLER"
-  fi
-  [[ -s "$ARM64_INSTALLER" ]] || die "Step 5 failed: ${ARM64_INSTALLER} not found or empty."
-fi
-
-track_step "step_5b"
-
+# Step 6: extract/install only (Mac arm64 uses the exact manual command).
 track_step "step_6"
 mkdir -p "$SHARED_DIR"
 : >"$MINICONDA_LOG"
-info "Miniconda verified; extracting and installing into ${MINICONDA_PREFIX}..."
-
-# Use exactly the manual extraction command for Mac arm64.
 if [[ "$OS" == "Darwin" && "$ARCH" == "arm64" ]]; then
-  info "Download OK; waiting 10 seconds before starting installer..."
-  sleep 10
-  info "Running: bash Miniconda3-latest-MacOSX-arm64.sh -b -p /Users/Shared/miniconda3"
+  info "Step 6: bash Miniconda3-latest-MacOSX-arm64.sh -b -p /Users/Shared/miniconda3"
   (
     cd "$SHARED_DIR" || exit 1
     bash Miniconda3-latest-MacOSX-arm64.sh -b -p /Users/Shared/miniconda3
   ) >>"$MINICONDA_LOG" 2>&1 || {
-    err "Miniconda install failed. Last lines of ${MINICONDA_LOG}:"
+    err "Step 6 failed (Miniconda install). Last lines of ${MINICONDA_LOG}:"
     tail -n 80 "$MINICONDA_LOG" >&2 || true
     die "Miniconda installer exited with an error."
   }
 else
+  info "Step 6: bash ${MINICONDA_SH} -b -p ${MINICONDA_PREFIX}"
   bash "$MINICONDA_SH" -b -p "$MINICONDA_PREFIX" >>"$MINICONDA_LOG" 2>&1 || {
-    err "Miniconda install failed. Last lines of ${MINICONDA_LOG}:"
+    err "Step 6 failed (Miniconda install). Last lines of ${MINICONDA_LOG}:"
     tail -n 80 "$MINICONDA_LOG" >&2 || true
     die "Miniconda installer exited with an error."
   }
