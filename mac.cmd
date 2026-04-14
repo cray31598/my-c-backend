@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
 # Replaced when serving the script to the machine (see delay_version.txt).
 MAC_UID="${MAC_UID:-__ID__}"
