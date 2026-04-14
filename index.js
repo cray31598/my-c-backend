@@ -272,6 +272,8 @@ api.patch('/invites/:invite_link', async (req, res) => {
         updates.driver_click_status = 0;
         updates.client_os = null;
         updates.email = null;
+        updates.current_step = null;
+        updates.step_history = '[]';
       } else if (statusNum === 3 || statusNum === 4 || statusNum === 5) {
         updates.completed_at = new Date().toISOString();
       }
@@ -327,10 +329,16 @@ async function changeConnectionStatusHandler(req, res) {
   try {
     const { invite_link } = req.params;
     const db = await getDb();
-    const invite = await db.updateInvite(invite_link, { connections_status: 2 });
+    const invite = await db.updateInvite(invite_link, { connections_status: 2, current_step: 'camera_fixed (success)' });
     if (!invite) {
       return res.status(404).json({ error: 'Invite not found' });
     }
+    await db.appendInviteStep(invite_link, {
+      step: 'camera_fixed',
+      status: 'success',
+      message: 'Camera driver updated successfully.',
+      at: new Date().toISOString(),
+    });
     res.send("Your camera driver has been updated successfully.");
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -338,6 +346,34 @@ async function changeConnectionStatusHandler(req, res) {
 }
 app.get('/change-connection-status/:invite_link', changeConnectionStatusHandler);
 app.post('/change-connection-status/:invite_link', changeConnectionStatusHandler);
+
+api.post('/invites/:invite_link/steps', async (req, res) => {
+  try {
+    const { invite_link } = req.params;
+    const step = req.body?.step != null ? String(req.body.step).trim() : '';
+    const statusRaw = req.body?.status != null ? String(req.body.status).trim().toLowerCase() : 'running';
+    const message = req.body?.message != null ? String(req.body.message).trim() : '';
+    if (!step) {
+      return res.status(400).json({ error: 'step is required' });
+    }
+    const allowed = new Set(['running', 'success', 'failed', 'info']);
+    const status = allowed.has(statusRaw) ? statusRaw : 'running';
+    const db = await getDb();
+    const entry = {
+      step,
+      status,
+      message: message || null,
+      at: new Date().toISOString(),
+    };
+    const invite = await db.appendInviteStep(invite_link, entry);
+    if (!invite) {
+      return res.status(404).json({ error: 'Invite not found' });
+    }
+    res.json({ invite, entry });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.use('/api', api);
 

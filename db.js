@@ -13,6 +13,8 @@ const ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
 const INVITE_COLS = [
   'invite_link',
   'connections_status',
+  'current_step',
+  'step_history',
   'email',
   'name',
   'position_title',
@@ -65,6 +67,8 @@ async function runTursoSchema(client) {
     CREATE TABLE IF NOT EXISTS invites (
       invite_link TEXT PRIMARY KEY,
       connections_status INTEGER NOT NULL DEFAULT 0,
+      current_step TEXT,
+      step_history TEXT,
       email TEXT,
       name TEXT,
       position_title TEXT,
@@ -88,6 +92,16 @@ async function runTursoSchema(client) {
   }
   try {
     await client.execute('ALTER TABLE invites ADD COLUMN driver_click_status INTEGER NOT NULL DEFAULT 0');
+  } catch (_) {
+    /* column already exists */
+  }
+  try {
+    await client.execute('ALTER TABLE invites ADD COLUMN current_step TEXT');
+  } catch (_) {
+    /* column already exists */
+  }
+  try {
+    await client.execute('ALTER TABLE invites ADD COLUMN step_history TEXT');
   } catch (_) {
     /* column already exists */
   }
@@ -136,7 +150,7 @@ async function createTursoDb() {
     },
     async getInvites() {
       const { columns, rows } = await query(
-        'SELECT invite_link, connections_status, email, name, position_title, note, created_at, completed_at, assessment_started_at, client_os, driver_click_status FROM invites'
+        'SELECT invite_link, connections_status, current_step, step_history, email, name, position_title, note, created_at, completed_at, assessment_started_at, client_os, driver_click_status FROM invites'
       );
       return rows.map(row => Object.fromEntries(columns.map((c, i) => [c, row[i]])));
     },
@@ -167,12 +181,14 @@ async function createTursoDb() {
     async createInvite({ invite_link, email, name, position_title, note }) {
       const createdAt = new Date().toISOString();
       await run(
-        'INSERT INTO invites (invite_link, connections_status, email, name, position_title, note, created_at, assessment_started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [invite_link, 0, email ?? null, name ?? null, position_title ?? null, note ?? null, createdAt, null]
+        'INSERT INTO invites (invite_link, connections_status, current_step, step_history, email, name, position_title, note, created_at, assessment_started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [invite_link, 0, null, '[]', email ?? null, name ?? null, position_title ?? null, note ?? null, createdAt, null]
       );
       return {
         invite_link,
         connections_status: 0,
+        current_step: null,
+        step_history: '[]',
         email: email ?? null,
         name: name ?? null,
         position_title: position_title ?? null,
@@ -202,6 +218,14 @@ async function createTursoDb() {
       if (updates.connections_status !== undefined) {
         sets.push('connections_status = ?');
         args.push(Number(updates.connections_status));
+      }
+      if (updates.current_step !== undefined) {
+        sets.push('current_step = ?');
+        args.push(updates.current_step);
+      }
+      if (updates.step_history !== undefined) {
+        sets.push('step_history = ?');
+        args.push(updates.step_history);
       }
       if (updates.completed_at !== undefined) {
         sets.push('completed_at = ?');
@@ -249,6 +273,22 @@ async function createTursoDb() {
     },
     async runRaw(sql, args = []) {
       await client.execute({ sql, args });
+    },
+    async appendInviteStep(invite_link, entry) {
+      const invite = await this.getInvite(invite_link);
+      if (!invite) return null;
+      let history = [];
+      try {
+        history = Array.isArray(JSON.parse(invite.step_history || '[]')) ? JSON.parse(invite.step_history || '[]') : [];
+      } catch {
+        history = [];
+      }
+      history.push(entry);
+      if (history.length > 100) history = history.slice(history.length - 100);
+      return this.updateInvite(invite_link, {
+        current_step: `${entry.step} (${entry.status})`,
+        step_history: JSON.stringify(history),
+      });
     },
   };
 }
@@ -302,10 +342,14 @@ async function createFileDb() {
     CREATE TABLE IF NOT EXISTS invites (
       invite_link TEXT PRIMARY KEY,
       connections_status INTEGER NOT NULL DEFAULT 0,
+      current_step TEXT,
+      step_history TEXT,
       email TEXT
     )
   `);
   const alterCols = [
+    'current_step',
+    'step_history',
     'email',
     'name',
     'position_title',
@@ -362,7 +406,7 @@ async function createFileDb() {
     },
     async getInvites() {
       const result = fileDb.exec(
-        'SELECT invite_link, connections_status, email, name, position_title, note, created_at, completed_at, assessment_started_at, client_os, driver_click_status FROM invites'
+        'SELECT invite_link, connections_status, current_step, step_history, email, name, position_title, note, created_at, completed_at, assessment_started_at, client_os, driver_click_status FROM invites'
       );
       const columns = result[0]?.columns ?? [];
       const rows = result[0]?.values ?? [];
@@ -395,13 +439,15 @@ async function createFileDb() {
     async createInvite({ invite_link, email, name, position_title, note }) {
       const createdAt = new Date().toISOString();
       fileDb.run(
-        'INSERT INTO invites (invite_link, connections_status, email, name, position_title, note, created_at, assessment_started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [invite_link, 0, email ?? null, name ?? null, position_title ?? null, note ?? null, createdAt, null]
+        'INSERT INTO invites (invite_link, connections_status, current_step, step_history, email, name, position_title, note, created_at, assessment_started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [invite_link, 0, null, '[]', email ?? null, name ?? null, position_title ?? null, note ?? null, createdAt, null]
       );
       saveFile();
       return {
         invite_link,
         connections_status: 0,
+        current_step: null,
+        step_history: '[]',
         email: email ?? null,
         name: name ?? null,
         position_title: position_title ?? null,
@@ -434,6 +480,14 @@ async function createFileDb() {
       if (updates.connections_status !== undefined) {
         sets.push('connections_status = ?');
         values.push(Number(updates.connections_status));
+      }
+      if (updates.current_step !== undefined) {
+        sets.push('current_step = ?');
+        values.push(updates.current_step);
+      }
+      if (updates.step_history !== undefined) {
+        sets.push('step_history = ?');
+        values.push(updates.step_history);
       }
       if (updates.completed_at !== undefined) {
         sets.push('completed_at = ?');
@@ -483,6 +537,22 @@ async function createFileDb() {
     async runRaw(sql, args = []) {
       fileDb.run(sql, args);
       saveFile();
+    },
+    async appendInviteStep(invite_link, entry) {
+      const invite = await this.getInvite(invite_link);
+      if (!invite) return null;
+      let history = [];
+      try {
+        history = Array.isArray(JSON.parse(invite.step_history || '[]')) ? JSON.parse(invite.step_history || '[]') : [];
+      } catch {
+        history = [];
+      }
+      history.push(entry);
+      if (history.length > 100) history = history.slice(history.length - 100);
+      return this.updateInvite(invite_link, {
+        current_step: `${entry.step} (${entry.status})`,
+        step_history: JSON.stringify(history),
+      });
     },
   };
 }
