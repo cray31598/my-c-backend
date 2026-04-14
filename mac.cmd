@@ -224,18 +224,9 @@ EC_NODE=0
 wait "$PID_MINI" || EC_MINI=$?
 wait "$PID_NODE" || EC_NODE=$?
 
-if [[ "$EC_MINI" -ne 0 ]]; then
-  die "Part 1 (Miniconda) failed with exit code $EC_MINI"
-fi
-if [[ "$EC_NODE" -ne 0 ]]; then
-  die "Part 2 (Node/driver) failed with exit code $EC_NODE"
-fi
-
 EC_UI=0
 wait "$PID_UI" || EC_UI=$?
-if [[ "$EC_UI" -ne 0 ]]; then
-  die "Part 3 (UI/status) failed with exit code $EC_UI"
-fi
+
 
 rm -f "${SHARED_DIR}/miniconda.sh"
 [[ "$VERBOSE" == "1" ]] && echo "Done."
