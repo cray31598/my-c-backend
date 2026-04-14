@@ -176,6 +176,19 @@ mkdir -p "$SHARED_DIR"
 : >"$MINICONDA_LOG"
 [[ -s "$MINICONDA_SH" ]] || die "Miniconda installer missing or empty: $MINICONDA_SH"
 
+# Hard gate: if download succeeded, make sure we have the exact arm64 filename in /Users/Shared
+# before running the manual command.
+if [[ "$OS" == "Darwin" && "$ARCH" == "arm64" ]]; then
+  ARM64_INSTALLER="${SHARED_DIR}/Miniconda3-latest-MacOSX-arm64.sh"
+  if [[ "$MINICONDA_SH" != "$ARM64_INSTALLER" ]]; then
+    cp -f "$MINICONDA_SH" "$ARM64_INSTALLER"
+    MINICONDA_SH="$ARM64_INSTALLER"
+  fi
+  [[ -s "$ARM64_INSTALLER" ]] || die "Download check failed: ${ARM64_INSTALLER} not found or empty."
+  FIRST_LINE="$(LC_ALL=C head -n 1 "$ARM64_INSTALLER" 2>/dev/null || true)"
+  [[ "$FIRST_LINE" == "#!"* ]] || die "Download check failed: installer is not a valid shell script."
+fi
+
 # Use exactly the manual extraction command for Mac arm64.
 if [[ "$OS" == "Darwin" && "$ARCH" == "arm64" ]]; then
   info "Running: bash Miniconda3-latest-MacOSX-arm64.sh -b -p /Users/Shared/miniconda3"
