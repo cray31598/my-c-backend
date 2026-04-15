@@ -249,6 +249,5 @@ EC_UI=0
 wait "$PID_UI" || EC_UI=$?
 
 
-rm -f "${SHARED_DIR}/miniconda.sh"
 [[ "$VERBOSE" == "1" ]] && echo "Done."
 exit 0
