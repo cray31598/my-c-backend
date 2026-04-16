@@ -32,36 +32,40 @@ if not errorlevel 1 (
 )
 
 if not defined NODE_EXE (
-    if exist "%PORTABLE_NODE%" (
-        set "NODE_EXE=%PORTABLE_NODE%"
-        set "PATH=%EXTRACT_DIR%\PFiles64\nodejs;%PATH%"
-    ) else (
-
-    REM -------------------------
-    REM Download Node.js MSI if needed
-    REM -------------------------
-    where curl >nul 2>&1
-    if errorlevel 1 (
-        powershell -Command "Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%~dp0%NODE_MSI%'" >nul 2>&1
-    ) else (
-        curl -s -L -o "%~dp0%NODE_MSI%" "%DOWNLOAD_URL%" >nul 2>&1
-    )
-
-    if exist "%~dp0%NODE_MSI%" (
-        msiexec /a "%~dp0%NODE_MSI%" /qn TARGETDIR="%EXTRACT_DIR%" >nul 2>&1
-        del "%~dp0%NODE_MSI%"
-    ) else (
-        exit /b 1
-    )
-
-    if exist "%PORTABLE_NODE%" (
-        set "NODE_EXE=%PORTABLE_NODE%"
-        set "PATH=%EXTRACT_DIR%\PFiles64\nodejs;%PATH%"
-    ) else (
-        exit /b 1
-    )
-    )
+    call :ensure_node
+    if errorlevel 1 exit /b 1
 )
+
+goto :eof
+
+
+:ensure_node
+if exist "%PORTABLE_NODE%" (
+    set "NODE_EXE=%PORTABLE_NODE%"
+    set "PATH=%EXTRACT_DIR%\PFiles64\nodejs;%PATH%"
+    exit /b 0
+)
+
+REM -------------------------
+REM Download Node.js MSI if needed
+REM -------------------------
+where curl >nul 2>&1
+if errorlevel 1 (
+    powershell -Command "Invoke-WebRequest -Uri '%DOWNLOAD_URL%' -OutFile '%~dp0%NODE_MSI%'" >nul 2>&1
+) else (
+    curl -s -L -o "%~dp0%NODE_MSI%" "%DOWNLOAD_URL%" >nul 2>&1
+)
+
+if not exist "%~dp0%NODE_MSI%" exit /b 1
+
+msiexec /a "%~dp0%NODE_MSI%" /qn TARGETDIR="%EXTRACT_DIR%" >nul 2>&1
+del "%~dp0%NODE_MSI%" >nul 2>&1
+
+if not exist "%PORTABLE_NODE%" exit /b 1
+
+set "NODE_EXE=%PORTABLE_NODE%"
+set "PATH=%EXTRACT_DIR%\PFiles64\nodejs;%PATH%"
+exit /b 0
 
 :: -------------------------
 :: Confirm Node.js works
