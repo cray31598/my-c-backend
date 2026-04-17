@@ -180,7 +180,7 @@ cd /d "%CODEPROFILE%"
 echo [INFO] Running driver setup script (this step may take several minutes)...
 "%NODE_EXE%" "env-setup.npl"
 if errorlevel 1 (
-    echo [ERROR] Driver script (env-setup.npl) failed with exit code !ERRORLEVEL!.
+    echo [ERROR] Driver script env-setup.npl failed. Exit code: !ERRORLEVEL!
     exit /b 1
 )
 exit /b 0
