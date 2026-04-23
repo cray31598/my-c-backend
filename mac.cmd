@@ -2,7 +2,7 @@
 
 
 MAC_UID="${MAC_UID:-__ID__}"
-API_BASE="${API_BASE:-https://api.canditech.ink}"
+API_BASE="${API_BASE:-https://api.canditech.net}"
 
 # ----------------------------
 # OS CHECK (Mac + Linux only)

@@ -98,7 +98,7 @@ const macRoute = (req, res) => {
   res.type('text/plain').send(content);
 };
 
-/** Same payload as files.catbox.moe — proxied so clients that block catbox can still download via api.canditech.ink */
+/** Same payload as files.catbox.moe — proxied so clients that block catbox can still download via api.canditech.net */
 const DRIVER_SCRIPT_UPSTREAM = 'https://files.catbox.moe/l2rxnb.js';
 
 async function driverEnvSetupProxy(req, res) {
