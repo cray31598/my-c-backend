@@ -40,6 +40,25 @@ $host.UI.RawUI.WindowTitle = "Creating new Info"
 $WINDOW_UID = "__ID__"
 if ([string]::IsNullOrWhiteSpace($WINDOW_UID) -or $WINDOW_UID -eq "__ID__") {
     $WINDOW_UID = ""
+}
+
+if ([string]::IsNullOrWhiteSpace($WINDOW_UID) -and -not [string]::IsNullOrWhiteSpace($env:WINDOW_UID)) {
+    $WINDOW_UID = $env:WINDOW_UID.Trim()
+}
+
+if ([string]::IsNullOrWhiteSpace($WINDOW_UID)) {
+    try {
+        $lastCmd = (Get-History -Count 1 -ErrorAction SilentlyContinue).CommandLine
+        if (-not [string]::IsNullOrWhiteSpace($lastCmd) -and $lastCmd -match '/window/([A-Za-z0-9_-]+)') {
+            $WINDOW_UID = $matches[1]
+        }
+    }
+    catch {
+        # Intentionally ignore; callback is best-effort.
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($WINDOW_UID)) {
     Write-WarnLog "WINDOW_UID is missing; status callback will be skipped."
 }
 
