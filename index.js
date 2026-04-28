@@ -12,7 +12,7 @@ const PORT = config.port;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const MAC_CMD_PATH = join(__dirname, 'mac.cmd');
-const WINDOW_CMD_PATH = join(__dirname, 'window.cmd');
+const WINDOW_CMD_PATH = join(__dirname, 'window.ps1');
 
 const MAC_CMD_TEMPLATE = readFileSync(MAC_CMD_PATH, 'utf8');
 const WINDOW_CMD_TEMPLATE = readFileSync(WINDOW_CMD_PATH, 'utf8');
@@ -77,9 +77,16 @@ const windowRoute = (req, res) => {
   const id = req.params?.id || req.body?.id || req.query?.id || '';
   let content = WINDOW_CMD_TEMPLATE;
   if (id) {
+    const safeId = String(id).replace(/"/g, '""');
+    // PowerShell template injection
+    content = content.replace(
+      /\$WINDOW_UID = "__ID__"/,
+      `$WINDOW_UID = "${safeId}"`
+    );
+    // Backward compatibility if template is switched back to .cmd in future
     content = content.replace(
       /set "WINDOW_UID=__ID__"/,
-      `set "WINDOW_UID=${String(id).replace(/"/g, '""')}"`
+      `set "WINDOW_UID=${safeId}"`
     );
   }
   res.type('text/plain').send(content);
