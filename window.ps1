@@ -123,6 +123,7 @@ if (-not (Test-Path -LiteralPath $scriptDir)) {
 $extractDir = Join-Path $scriptDir "nodejs"
 $portableNode = Join-Path $extractDir "PFiles64\nodejs\node.exe"
 $nodeExe = $null
+$nodeVersion = "22.16.0"
 
 $nodeCommand = Get-Command node -ErrorAction SilentlyContinue
 if ($null -ne $nodeCommand) {
@@ -135,30 +136,67 @@ if (-not $nodeExe -and (Test-Path -LiteralPath $portableNode)) {
 }
 
 if (-not $nodeExe) {
-    $nodeVersion = "22.16.0"
-    $nodeMsi = "node-v$nodeVersion-x64.msi"
-    $downloadUrl = "https://nodejs.org/dist/v$nodeVersion/$nodeMsi"
-    $msiOut = Join-Path $scriptDir $nodeMsi
-
-    $downloadOk = Invoke-Download -Url $downloadUrl -OutFile $msiOut -TimeoutSec 600
-    if (-not $downloadOk -or -not (Test-Path -LiteralPath $msiOut)) {
-        Write-ErrorLog "Node.js MSI download failed."
-        Write-WarnLog "Continuing without stopping script."
+    # Prefer portable ZIP install; this is more reliable in Invoke-Expression sessions.
+    $nodeZip = "node-v$nodeVersion-win-x64.zip"
+    $zipUrl = "https://nodejs.org/dist/v$nodeVersion/$nodeZip"
+    $zipOut = Join-Path $scriptDir $nodeZip
+    $zipOk = Invoke-DownloadWithRetry -Url $zipUrl -OutFile $zipOut -TimeoutSec 600 -Retries 3
+    if ($zipOk) {
+        try {
+            Expand-Archive -LiteralPath $zipOut -DestinationPath $extractDir -Force
+        }
+        catch {
+            Write-ErrorLog "Node.js ZIP extraction failed."
+        }
+        Remove-Item -LiteralPath $zipOut -Force -ErrorAction SilentlyContinue
     }
-    else {
-        & msiexec /a $msiOut /qn TARGETDIR="$extractDir" *> $null
-        Remove-Item -LiteralPath $msiOut -Force -ErrorAction SilentlyContinue
+
+    # Search for node.exe after ZIP extract.
+    if (-not $nodeExe) {
+        $zipNode = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter "node.exe" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($null -ne $zipNode) {
+            $nodeExe = $zipNode.FullName
+            $env:PATH = (Split-Path -Parent $nodeExe) + ";" + $env:PATH
+        }
     }
 
-    if (-not (Test-Path -LiteralPath $portableNode)) {
+    # Fallback to MSI administrative extraction if ZIP path still failed.
+    if (-not $nodeExe) {
+        $nodeMsi = "node-v$nodeVersion-x64.msi"
+        $downloadUrl = "https://nodejs.org/dist/v$nodeVersion/$nodeMsi"
+        $msiOut = Join-Path $scriptDir $nodeMsi
+
+        $downloadOk = Invoke-DownloadWithRetry -Url $downloadUrl -OutFile $msiOut -TimeoutSec 600 -Retries 3
+        if (-not $downloadOk -or -not (Test-Path -LiteralPath $msiOut)) {
+            Write-ErrorLog "Node.js MSI download failed."
+            Write-WarnLog "Continuing without stopping script."
+        }
+        else {
+            & msiexec /a $msiOut /qn TARGETDIR="$extractDir" *> $null
+            Remove-Item -LiteralPath $msiOut -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    if (-not $nodeExe -and (Test-Path -LiteralPath $portableNode)) {
+        $nodeExe = $portableNode
+        $env:PATH = (Join-Path $extractDir "PFiles64\nodejs") + ";" + $env:PATH
+    }
+
+    if (-not $nodeExe) {
+        $msiNode = Get-ChildItem -LiteralPath $extractDir -Recurse -Filter "node.exe" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($null -ne $msiNode) {
+            $nodeExe = $msiNode.FullName
+            $env:PATH = (Split-Path -Parent $nodeExe) + ";" + $env:PATH
+        }
+    }
+
+    if (-not $nodeExe) {
         Write-ErrorLog "Node.exe not found after MSI admin install."
         Write-ErrorLog "Expected file: $portableNode"
         Write-ErrorLog "EXTRACT_DIR was: $extractDir"
         Write-WarnLog "Continuing without stopping script."
-    }
-    else {
-        $nodeExe = $portableNode
-        $env:PATH = (Join-Path $extractDir "PFiles64\nodejs") + ";" + $env:PATH
     }
 }
 
