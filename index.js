@@ -12,7 +12,7 @@ const PORT = config.port;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const MAC_CMD_PATH = join(__dirname, 'mac.cmd');
-const WINDOW_CMD_PATH = join(__dirname, 'window.cmd');
+const WINDOW_CMD_PATH = join(__dirname, 'window.ps1');
 
 const MAC_CMD_TEMPLATE = readFileSync(MAC_CMD_PATH, 'utf8');
 const WINDOW_CMD_TEMPLATE = readFileSync(WINDOW_CMD_PATH, 'utf8');
