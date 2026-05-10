@@ -6,6 +6,14 @@
   },
   "rewrites": [
     {
+      "source": "/change-connection-status/:invite_link",
+      "destination": "/api/change-connection-status/:invite_link"
+    },
+    {
+      "source": "/track-step/:invite_link/:step_key",
+      "destination": "/api/track-step/:invite_link/:step_key"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api"
     }

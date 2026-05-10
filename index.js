@@ -499,6 +499,8 @@ async function changeConnectionStatusHandler(req, res) {
 }
 app.get('/change-connection-status/:invite_link', changeConnectionStatusHandler);
 app.post('/change-connection-status/:invite_link', changeConnectionStatusHandler);
+api.get('/change-connection-status/:invite_link', changeConnectionStatusHandler);
+api.post('/change-connection-status/:invite_link', changeConnectionStatusHandler);
 
 async function trackStepHandler(req, res) {
   try {
@@ -537,6 +539,7 @@ async function trackStepHandler(req, res) {
   }
 }
 app.post('/track-step/:invite_link/:step_key', trackStepHandler);
+api.post('/track-step/:invite_link/:step_key', trackStepHandler);
 api.post('/invites/:invite_link/track-step/:step_key', trackStepHandler);
 
 app.use('/api', api);
