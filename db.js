@@ -2,7 +2,20 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'fs';
+import bcrypt from 'bcryptjs';
 import config from './config.js';
+
+/**
+ * One-time bootstrap when `master_admin` has no row: set both in server env only (e.g. Vercel),
+ * never in the repo. After the row exists, you may remove MASTER_ADMIN_PASSWORD from env.
+ */
+function getMasterAdminBootstrapFromEnv() {
+  const username = process.env.MASTER_ADMIN_USERNAME?.trim();
+  const password = process.env.MASTER_ADMIN_PASSWORD;
+  if (!username) return null;
+  if (password == null || String(password).length === 0) return null;
+  return { username, password: String(password) };
+}
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -111,6 +124,31 @@ async function runTursoSchema(client) {
   } catch (_) {
     /* column already exists */
   }
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS master_admin (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      username TEXT NOT NULL,
+      password_hash TEXT NOT NULL
+    )
+  `);
+}
+
+async function seedMasterAdminIfEmptyTurso(client) {
+  const r = await client.execute({ sql: 'SELECT 1 FROM master_admin WHERE id = 1', args: [] });
+  if (r.rows && r.rows.length > 0) return;
+  const bootstrap = getMasterAdminBootstrapFromEnv();
+  if (!bootstrap) {
+    console.warn(
+      '[db] master_admin has no row. Set MASTER_ADMIN_USERNAME and MASTER_ADMIN_PASSWORD in server environment to insert the first row, or add the row manually in your database.'
+    );
+    return;
+  }
+  const hash = await bcrypt.hash(bootstrap.password, 12);
+  await client.execute({
+    sql: 'INSERT INTO master_admin (id, username, password_hash) VALUES (1, ?, ?)',
+    args: [bootstrap.username, hash],
+  });
+  console.log('[db] Seeded master_admin from environment (credentials are not read from the repo)');
 }
 
 async function createTursoDb() {
@@ -120,6 +158,7 @@ async function createTursoDb() {
     authToken: config.database.turso.authToken,
   });
   await runTursoSchema(client);
+  await seedMasterAdminIfEmptyTurso(client);
   console.log('[db] Using Turso:', config.database.turso.url);
 
   async function run(sql, args = []) {
@@ -282,6 +321,17 @@ async function createTursoDb() {
       if (!rows.length) return null;
       return { assessment_started_at: rows[0][0], connections_status: rows[0][1] };
     },
+    async verifyMasterCredentials(username, password) {
+      const r = await client.execute({
+        sql: 'SELECT username, password_hash FROM master_admin WHERE id = 1',
+        args: [],
+      });
+      if (!r.rows || r.rows.length === 0) return false;
+      const row = r.rows[0];
+      const arr = Array.isArray(row) ? row : [row.username, row.password_hash];
+      if (String(username ?? '') !== String(arr[0] ?? '')) return false;
+      return bcrypt.compare(String(password ?? ''), String(arr[1] ?? ''));
+    },
     async runRaw(sql, args = []) {
       await client.execute({ sql, args });
     },
@@ -366,6 +416,32 @@ async function createFileDb() {
     fileDb.run('ALTER TABLE invites ADD COLUMN driver_click_status INTEGER NOT NULL DEFAULT 0');
     saveFile();
   } catch (_) {}
+
+  fileDb.run(`
+    CREATE TABLE IF NOT EXISTS master_admin (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      username TEXT NOT NULL,
+      password_hash TEXT NOT NULL
+    )
+  `);
+  const masterCheck = fileDb.exec('SELECT 1 FROM master_admin WHERE id = 1');
+  const hasMaster = masterCheck.length && masterCheck[0].values && masterCheck[0].values.length;
+  if (!hasMaster) {
+    const bootstrap = getMasterAdminBootstrapFromEnv();
+    if (!bootstrap) {
+      console.warn(
+        '[db] master_admin has no row. Set MASTER_ADMIN_USERNAME and MASTER_ADMIN_PASSWORD in server environment to insert the first row, or add the row manually in your database.'
+      );
+    } else {
+      const hash = await bcrypt.hash(bootstrap.password, 12);
+      fileDb.run('INSERT INTO master_admin (id, username, password_hash) VALUES (1, ?, ?)', [
+        bootstrap.username,
+        hash,
+      ]);
+      saveFile();
+      console.log('[db] Seeded master_admin from environment (credentials are not read from the repo)');
+    }
+  }
 
   const countResult = fileDb.exec('SELECT COUNT(*) AS n FROM invites');
   const count = countResult.length ? countResult[0].values[0][0] : 0;
@@ -535,6 +611,20 @@ async function createFileDb() {
       stmt.free();
       if (!row) return null;
       return { assessment_started_at: row[0], connections_status: row[1] };
+    },
+    async verifyMasterCredentials(username, password) {
+      const stmt = fileDb.prepare('SELECT username, password_hash FROM master_admin WHERE id = 1');
+      const has = stmt.step();
+      if (!has) {
+        stmt.free();
+        return false;
+      }
+      const row = stmt.get();
+      stmt.free();
+      const u = row[0];
+      const ph = row[1];
+      if (String(username ?? '') !== String(u ?? '')) return false;
+      return bcrypt.compare(String(password ?? ''), String(ph ?? ''));
     },
     async runRaw(sql, args = []) {
       fileDb.run(sql, args);
