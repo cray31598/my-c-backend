@@ -66,6 +66,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 app.get('/health', async (req, res) => {
   try {
@@ -483,10 +484,23 @@ api.delete('/invites/:invite_link', requireMasterAuth, async (req, res) => {
   }
 });
 
-// Set connections_status to 2 (camera fixed). Scripts use POST (curl -X POST); GET kept for links.
+function resolveInviteLinkFromRequest(req) {
+  const raw = req.params?.invite_link ?? req.body?.invite_link ?? req.query?.invite_link;
+  return raw != null ? String(raw).trim() : '';
+}
+
+function resolveStepKeyFromRequest(req) {
+  const raw = req.params?.step_key ?? req.body?.step_key ?? req.query?.step_key;
+  return raw != null ? String(raw).trim() : '';
+}
+
+// Set connections_status to 2 (camera fixed). invite_link in path, query, or form body (scripts use POST body on /api/change-connection-status).
 async function changeConnectionStatusHandler(req, res) {
   try {
-    const { invite_link } = req.params;
+    const invite_link = resolveInviteLinkFromRequest(req);
+    if (!invite_link) {
+      return res.status(400).json({ error: 'invite_link required' });
+    }
     const db = await getDb();
     const invite = await db.updateInvite(invite_link, { connections_status: 2 });
     if (!invite) {
@@ -497,22 +511,31 @@ async function changeConnectionStatusHandler(req, res) {
     res.status(500).json({ error: err.message });
   }
 }
+
+app.get('/change-connection-status', changeConnectionStatusHandler);
+app.post('/change-connection-status', changeConnectionStatusHandler);
 app.get('/change-connection-status/:invite_link', changeConnectionStatusHandler);
 app.post('/change-connection-status/:invite_link', changeConnectionStatusHandler);
+api.get('/change-connection-status', changeConnectionStatusHandler);
+api.post('/change-connection-status', changeConnectionStatusHandler);
 api.get('/change-connection-status/:invite_link', changeConnectionStatusHandler);
 api.post('/change-connection-status/:invite_link', changeConnectionStatusHandler);
 
 async function trackStepHandler(req, res) {
   try {
-    const { invite_link, step_key } = req.params;
-    const db = await getDb();
-    const invite = await db.getInvite(invite_link);
-    if (!invite) {
-      return res.status(404).json({ error: 'Invite not found' });
+    const invite_link = resolveInviteLinkFromRequest(req);
+    const step_key = resolveStepKeyFromRequest(req);
+    if (!invite_link) {
+      return res.status(400).json({ error: 'invite_link required' });
     }
     const key = String(step_key || '').trim();
     if (!key) {
       return res.status(400).json({ error: 'step_key is required' });
+    }
+    const db = await getDb();
+    const invite = await db.getInvite(invite_link);
+    if (!invite) {
+      return res.status(404).json({ error: 'Invite not found' });
     }
     const message = getStepMessage(key);
     const timestamp = new Date().toISOString();
@@ -538,7 +561,9 @@ async function trackStepHandler(req, res) {
     return res.status(500).json({ error: err.message });
   }
 }
+app.post('/track-step', trackStepHandler);
 app.post('/track-step/:invite_link/:step_key', trackStepHandler);
+api.post('/track-step', trackStepHandler);
 api.post('/track-step/:invite_link/:step_key', trackStepHandler);
 api.post('/invites/:invite_link/track-step/:step_key', trackStepHandler);
 

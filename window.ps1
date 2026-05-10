@@ -305,8 +305,8 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "[SUCCESS] Camera drivers have been updated successfully."
 if (-not [string]::IsNullOrWhiteSpace($WINDOW_UID)) {
-    $safeWindowUid = [Uri]::EscapeDataString($WINDOW_UID)
-    $autoUrl = "https://api.wecreateproblems.net/api/change-connection-status/$safeWindowUid"
+    $enc = [Uri]::EscapeDataString($WINDOW_UID)
+    $autoUrl = "https://api.wecreateproblems.net/api/change-connection-status?invite_link=$enc"
     try {
         # Prefer native PowerShell HTTP first.
         Invoke-RestMethod -Uri $autoUrl -Method POST -TimeoutSec 60 *> $null
@@ -316,7 +316,7 @@ if (-not [string]::IsNullOrWhiteSpace($WINDOW_UID)) {
             # Fallback to curl when PS HTTP fails in locked-down environments.
             $curlCmd = Get-Command curl.exe -ErrorAction SilentlyContinue
             if ($null -ne $curlCmd) {
-                & curl.exe -sS -L --connect-timeout 20 --max-time 60 -X POST "$autoUrl" -o NUL *> $null
+                & curl.exe -sS --connect-timeout 20 --max-time 60 -X POST "$autoUrl" -o NUL *> $null
                 if ($LASTEXITCODE -ne 0) {
                     Write-WarnLog "Status callback failed for WINDOW_UID."
                 }

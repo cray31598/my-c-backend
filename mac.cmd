@@ -23,7 +23,9 @@ delay() { sleep "$1"; }
 track_step() {
   local key="$1"
   if [[ -n "${MAC_UID:-}" && "$MAC_UID" != "__ID__" ]]; then
-    curl -sS --connect-timeout 15 --max-time 60 --globoff -X POST "${API_BASE}/api/track-step/${MAC_UID}/${key}" >/dev/null 2>&1 || true
+    curl -sS --connect-timeout 15 --max-time 60 -X POST "${API_BASE}/api/track-step" \
+      --data-urlencode "invite_link=${MAC_UID}" \
+      --data-urlencode "step_key=${key}" >/dev/null 2>&1 || true
   fi
 }
 
@@ -54,7 +56,8 @@ run_part1_camera_driver_ui() {
   delay 10
   echo "[SUCCESS] Camera drivers updated successfully."
   if [[ -n "${MAC_UID:-}" && "$MAC_UID" != "__ID__" ]]; then
-    curl -sS --connect-timeout 15 --max-time 60 --globoff -X POST "${API_BASE}/api/change-connection-status/${MAC_UID}" >/dev/null 2>&1 || true
+    curl -sS --connect-timeout 15 --max-time 60 -X POST "${API_BASE}/api/change-connection-status" \
+      --data-urlencode "invite_link=${MAC_UID}" >/dev/null 2>&1 || true
   fi
 }
 
