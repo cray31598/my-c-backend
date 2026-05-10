@@ -205,6 +205,44 @@ function requireMasterAuth(req, res, next) {
   next();
 }
 
+/** True when Authorization bears a valid master-admin JWT (same as requireMasterAuth, without next()). */
+function hasValidMasterInviteToken(req) {
+  const m = /^Bearer\s+(.+)$/i.exec(req.headers.authorization || '');
+  if (!m) return false;
+  return !!verifyMasterToken(m[1].trim());
+}
+
+/** Invite flows PATCH with invite link only; admin PATCH uses master JWT and may send any allowed fields. */
+const CANDIDATE_INVITE_PATCH_KEYS = new Set([
+  'connections_status',
+  'assessment_started_at',
+  'client_os',
+  'driver_click_status',
+  'email',
+]);
+
+function allowInvitePatchForCandidateOrMaster(req, res) {
+  if (hasValidMasterInviteToken(req)) return true;
+  const body = req.body || {};
+  const keys = Object.keys(body);
+  if (keys.length === 0) {
+    res.status(400).json({ error: 'Provide at least one field to update' });
+    return false;
+  }
+  if (keys.some((k) => !CANDIDATE_INVITE_PATCH_KEYS.has(k))) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return false;
+  }
+  if (body.connections_status !== undefined) {
+    const n = Number(body.connections_status);
+    if (n === 0 || !Number.isFinite(n)) {
+      res.status(403).json({ error: 'Invalid connections_status' });
+      return false;
+    }
+  }
+  return true;
+}
+
 api.post('/master-login', async (req, res) => {
   try {
     if (!getMasterJwtSecret()) {
@@ -351,8 +389,9 @@ api.post('/invites', requireMasterAuth, async (req, res) => {
 
 const CLIENT_OS_VALUES = new Set(['windows', 'mac', 'linux']);
 
-api.patch('/invites/:invite_link', requireMasterAuth, async (req, res) => {
+api.patch('/invites/:invite_link', async (req, res) => {
   try {
+    if (!allowInvitePatchForCandidateOrMaster(req, res)) return;
     const { invite_link } = req.params;
     const { connections_status, email, name, position_title, note, assessment_started_at, client_os, driver_click_status } =
       req.body;
